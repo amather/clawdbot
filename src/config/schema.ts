@@ -162,6 +162,7 @@ const FIELD_LABELS: Record<string, string> = {
   "channels.discord": "Discord",
   "channels.slack": "Slack",
   "channels.signal": "Signal",
+  "channels.matrix": "Matrix",
   "channels.imessage": "iMessage",
   "channels.msteams": "MS Teams",
   "channels.telegram.botToken": "Telegram Bot Token",
@@ -178,6 +179,10 @@ const FIELD_LABELS: Record<string, string> = {
   "channels.whatsapp.dmPolicy": "WhatsApp DM Policy",
   "channels.whatsapp.selfChatMode": "WhatsApp Self-Phone Mode",
   "channels.signal.dmPolicy": "Signal DM Policy",
+  "channels.matrix.serverUrl": "Matrix Server URL",
+  "channels.matrix.username": "Matrix Username",
+  "channels.matrix.password": "Matrix Password",
+  "channels.matrix.dmPolicy": "Matrix DM Policy",
   "channels.imessage.dmPolicy": "iMessage DM Policy",
   "channels.discord.dm.policy": "Discord DM Policy",
   "channels.discord.retry.attempts": "Discord Retry Attempts",
@@ -336,6 +341,8 @@ const FIELD_HELP: Record<string, string> = {
     "Same-phone setup (bot uses your personal WhatsApp number).",
   "channels.signal.dmPolicy":
     'Direct message access control ("pairing" recommended). "open" requires channels.signal.allowFrom=["*"].',
+  "channels.matrix.dmPolicy":
+    'Direct message access control ("pairing" recommended). "open" requires channels.matrix.allowFrom=["*"].',
   "channels.imessage.dmPolicy":
     'Direct message access control ("pairing" recommended). "open" requires channels.imessage.allowFrom=["*"].',
   "channels.discord.dm.policy":
