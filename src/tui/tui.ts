@@ -11,10 +11,17 @@ import {
   formatThinkingLevels,
   normalizeUsageDisplay,
 } from "../auto-reply/thinking.js";
-import { loadConfig } from "../config/config.js";
+import { getChannelPlugin } from "../channels/plugins/index.js";
+import { listChatChannels } from "../channels/registry.js";
+import {
+  loadConfig,
+  readConfigFileSnapshot,
+  writeConfigFile,
+} from "../config/config.js";
 import { formatAge } from "../infra/channel-summary.js";
 import {
   buildAgentMainSessionKey,
+  normalizeAccountId,
   normalizeAgentId,
   normalizeMainKey,
   parseAgentSessionKey,
@@ -23,6 +30,7 @@ import { formatTokenCount } from "../utils/usage-format.js";
 import { getSlashCommands, helpText, parseCommand } from "./commands.js";
 import { ChatLog } from "./components/chat-log.js";
 import { CustomEditor } from "./components/custom-editor.js";
+import { createMatrixSetupWizard } from "./components/provider-setup.js";
 import {
   createSelectList,
   createSettingsList,
@@ -835,6 +843,92 @@ export async function runTui(opts: TuiOptions) {
     }
   };
 
+  const openMatrixSetup = async () => {
+    const snapshot = await readConfigFileSnapshot();
+    if (snapshot.exists && !snapshot.valid) {
+      chatLog.addSystem("config invalid: fix it before editing channels");
+      tui.requestRender();
+      return;
+    }
+    const cfg = snapshot.config;
+    const plugin = getChannelPlugin("matrix");
+    if (!plugin?.setup?.applyAccountConfig) {
+      chatLog.addSystem("matrix setup not available");
+      tui.requestRender();
+      return;
+    }
+    const wizard = createMatrixSetupWizard({
+      cfg,
+      onCancel: () => {
+        closeOverlay();
+        tui.requestRender();
+      },
+      onSubmit: (values) => {
+        void (async () => {
+          try {
+            const accountId =
+              plugin.setup.resolveAccountId?.({
+                cfg,
+                accountId: values.accountId,
+              }) ?? normalizeAccountId(values.accountId);
+            const next = plugin.setup.applyAccountConfig({
+              cfg,
+              accountId,
+              input: {
+                name: values.name,
+                serverUrl: values.serverUrl,
+                username: values.username,
+                password: values.password,
+              },
+            });
+            await writeConfigFile(next);
+            chatLog.addSystem(`Matrix account "${accountId}" saved.`);
+          } catch (err) {
+            chatLog.addSystem(`Matrix setup failed: ${String(err)}`);
+          }
+          closeOverlay();
+          tui.requestRender();
+        })();
+      },
+    });
+    openOverlay(wizard);
+    tui.requestRender();
+  };
+
+  const openProviderSetup = async () => {
+    const channels = listChatChannels();
+    if (channels.length === 0) {
+      chatLog.addSystem("no channels available");
+      tui.requestRender();
+      return;
+    }
+    const items = channels.map((channel) => ({
+      value: channel.id,
+      label: channel.label,
+      description: channel.blurb ?? "",
+    }));
+    const selector = createSelectList(items, 9);
+    selector.onSelect = (item) => {
+      void (async () => {
+        closeOverlay();
+        if (item.value === "matrix") {
+          await openMatrixSetup();
+          return;
+        }
+        chatLog.addSystem(
+          `TUI setup is only available for Matrix. Use: clawdbot channels add --channel ${item.value}`,
+        );
+        tui.requestRender();
+      })();
+    };
+    selector.onCancel = () => {
+      closeOverlay();
+      tui.requestRender();
+    };
+    openOverlay(selector);
+    tui.requestRender();
+  };
+
   const openSettings = () => {
     const items = [
       {
@@ -920,6 +1014,9 @@ export async function runTui(opts: TuiOptions) {
         break;
       case "sessions":
         await openSessionSelector();
+        break;
+      case "providers":
+        await openProviderSetup();
         break;
       case "model":
         if (!args) {
