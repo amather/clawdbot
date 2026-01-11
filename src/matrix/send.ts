@@ -1,0 +1,144 @@
+import type { MatrixClient, UploadResponse } from "matrix-js-sdk";
+
+import { mediaKindFromMime } from "../media/constants.js";
+import { loadWebMedia } from "../web/media.js";
+
+type MatrixSendResult = {
+  eventId: string;
+};
+
+function buildReplyRelation(replyToId?: string): Record<string, unknown> | undefined {
+  const id = replyToId?.trim();
+  if (!id) return undefined;
+  return {
+    "m.relates_to": {
+      "m.in_reply_to": {
+        event_id: id,
+      },
+    },
+  };
+}
+
+function resolveUploadUrl(upload: UploadResponse): string {
+  const contentUri =
+    (upload as { content_uri?: string }).content_uri ??
+    (upload as { contentUri?: string }).contentUri ??
+    "";
+  if (!contentUri) {
+    throw new Error("Matrix upload failed: missing content_uri");
+  }
+  return contentUri;
+}
+
+export async function sendMatrixText(params: {
+  client: MatrixClient;
+  roomId: string;
+  text: string;
+  replyToId?: string;
+}): Promise<MatrixSendResult> {
+  const body = params.text ?? "";
+  if (!body.trim()) {
+    throw new Error("Matrix send requires non-empty text");
+  }
+  const content = {
+    msgtype: "m.text",
+    body,
+    ...buildReplyRelation(params.replyToId),
+  };
+  const res = await params.client.sendEvent(
+    params.roomId,
+    "m.room.message",
+    content,
+  );
+  return { eventId: res.event_id };
+}
+
+export async function resolveMatrixRoomId(params: {
+  client: MatrixClient;
+  to: string;
+}): Promise<string> {
+  let target = params.to.trim();
+  if (!target) throw new Error("Matrix target is required");
+  if (target.toLowerCase().startsWith("matrix:")) {
+    target = target.slice("matrix:".length).trim();
+  }
+  if (target.toLowerCase().startsWith("room:")) {
+    const roomId = target.slice("room:".length).trim();
+    if (!roomId) throw new Error("Matrix room id is required");
+    return roomId;
+  }
+  if (target.startsWith("!")) {
+    return target;
+  }
+  if (target.startsWith("@")) {
+    const userId = target;
+    const selfId = params.client.getUserId();
+    const rooms = params.client.getRooms();
+    for (const room of rooms) {
+      const joined = room.getJoinedMembers();
+      if (joined.length > 2) continue;
+      const hasUser = joined.some((member) => member.userId === userId);
+      const hasSelf = selfId
+        ? joined.some((member) => member.userId === selfId)
+        : true;
+      if (hasUser && hasSelf) {
+        return room.roomId;
+      }
+    }
+    const created = await params.client.createRoom({
+      invite: [userId],
+      is_direct: true,
+    });
+    return created.room_id;
+  }
+  throw new Error(
+    "Matrix target must be room:<roomId> or a user id like @user:server",
+  );
+}
+
+export async function sendMatrixMedia(params: {
+  client: MatrixClient;
+  roomId: string;
+  text?: string;
+  mediaUrl: string;
+  maxBytes?: number;
+  replyToId?: string;
+}): Promise<MatrixSendResult> {
+  const media = await loadWebMedia(params.mediaUrl, params.maxBytes);
+  const upload = await params.client.uploadContent(media.buffer, {
+    type: media.contentType,
+    name: media.fileName,
+  });
+  const mxcUrl = resolveUploadUrl(upload);
+  const kind = media.kind;
+  const msgtype =
+    kind === "image"
+      ? "m.image"
+      : kind === "audio"
+        ? "m.audio"
+        : kind === "video"
+          ? "m.video"
+          : "m.file";
+  const placeholder = (() => {
+    if (params.text?.trim()) return params.text.trim();
+    if (media.fileName) return media.fileName;
+    const derivedKind = mediaKindFromMime(media.contentType ?? undefined);
+    return derivedKind ? `<media:${derivedKind}>` : "<media:file>";
+  })();
+  const content = {
+    msgtype,
+    body: placeholder,
+    url: mxcUrl,
+    info: {
+      mimetype: media.contentType ?? undefined,
+      size: media.buffer.length,
+    },
+    ...buildReplyRelation(params.replyToId),
+  };
+  const res = await params.client.sendEvent(
+    params.roomId,
+    "m.room.message",
+    content,
+  );
+  return { eventId: res.event_id };
+}

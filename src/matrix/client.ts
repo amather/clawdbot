@@ -1,0 +1,222 @@
+import {
+  type MatrixClient,
+  MemoryStore,
+  createClient,
+  type SyncStateData,
+  SyncState,
+  type MatrixEvent,
+  type Room,
+} from "matrix-js-sdk";
+
+import { computeBackoff, sleepWithAbort } from "../infra/backoff.js";
+import {
+  loadMatrixStorage,
+  readMatrixAuthState,
+  readMatrixSyncState,
+  writeMatrixAuthState,
+  writeMatrixSyncState,
+} from "./state.js";
+
+const DEFAULT_SYNC_LIMIT = 20;
+const SYNC_BACKOFF = {
+  initialMs: 1500,
+  maxMs: 30_000,
+  factor: 1.8,
+  jitter: 0.25,
+} as const;
+
+function normalizeServerUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) throw new Error("Matrix serverUrl is required");
+  if (/^https?:\/\//i.test(trimmed)) return trimmed.replace(/\/+$/, "");
+  return `https://${trimmed}`.replace(/\/+$/, "");
+}
+
+function resolveEnvValue(
+  raw: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  const match = /^env:(.+)$/i.exec(trimmed);
+  if (!match) return trimmed;
+  const value = env[match[1]?.trim() ?? ""];
+  return value?.trim() ?? "";
+}
+
+export async function createMatrixClient(params: {
+  serverUrl: string;
+  username: string;
+  password: string;
+  deviceId?: string;
+  accountId?: string | null;
+  env?: NodeJS.ProcessEnv;
+  homedir?: () => string;
+}): Promise<MatrixClient> {
+  const serverUrl = normalizeServerUrl(params.serverUrl);
+  const env = params.env ?? process.env;
+  const storage = await loadMatrixStorage({
+    accountId: params.accountId,
+    env,
+    homedir: params.homedir,
+  });
+  const store = new MemoryStore({ localStorage: storage });
+
+  const cached = await readMatrixAuthState({
+    accountId: params.accountId,
+    env,
+    homedir: params.homedir,
+  });
+  let accessToken = cached?.accessToken?.trim() ?? "";
+  let userId = cached?.userId?.trim() ?? "";
+  let deviceId = params.deviceId?.trim() || cached?.deviceId?.trim() || "";
+
+  if (!accessToken || !userId || cached?.serverUrl !== serverUrl) {
+    const password = resolveEnvValue(params.password, env);
+    if (!password) {
+      throw new Error("Matrix password is required");
+    }
+    const loginClient = createClient({ baseUrl: serverUrl });
+    const login = await loginClient.loginWithPassword(
+      params.username,
+      password,
+    );
+    accessToken = login.access_token;
+    userId = login.user_id;
+    deviceId = login.device_id ?? deviceId;
+    if (!accessToken || !userId) {
+      throw new Error("Matrix login failed: missing access token or user id");
+    }
+    await writeMatrixAuthState({
+      accountId: params.accountId,
+      env,
+      homedir: params.homedir,
+      state: {
+        accessToken,
+        userId,
+        deviceId: deviceId || undefined,
+        serverUrl,
+      },
+    });
+  }
+
+  const client = createClient({
+    baseUrl: serverUrl,
+    accessToken,
+    userId,
+    deviceId: deviceId || undefined,
+    store,
+  });
+  await client.initRustCrypto({ useIndexedDB: false });
+  return client;
+}
+
+export async function startMatrixSync(
+  client: MatrixClient,
+  params: {
+    accountId?: string | null;
+    initialSyncLimit?: number;
+    abortSignal?: AbortSignal;
+    onEvent: (params: { event: MatrixEvent; room: Room }) => void;
+    onError?: (err: Error) => void;
+    onSyncState?: (state: SyncState, data?: SyncStateData) => void;
+    env?: NodeJS.ProcessEnv;
+    homedir?: () => string;
+  },
+): Promise<void> {
+  const syncState = await readMatrixSyncState({
+    accountId: params.accountId,
+    env: params.env,
+    homedir: params.homedir,
+  });
+  if (syncState?.nextBatch) {
+    client.store.setSyncToken(syncState.nextBatch);
+  }
+
+  let restartAttempt = 0;
+  let restarting = false;
+
+  const onTimeline = (
+    event: MatrixEvent,
+    room: Room | undefined,
+    toStartOfTimeline: boolean,
+  ) => {
+    if (!room || toStartOfTimeline) return;
+    params.onEvent({ event, room });
+  };
+
+  const scheduleRestart = async (err: Error) => {
+    if (restarting) return;
+    if (params.abortSignal?.aborted) return;
+    restarting = true;
+    restartAttempt += 1;
+    params.onError?.(err);
+    const delayMs = computeBackoff(SYNC_BACKOFF, restartAttempt);
+    try {
+      await sleepWithAbort(delayMs, params.abortSignal);
+    } catch {
+      restarting = false;
+      return;
+    }
+    if (params.abortSignal?.aborted) {
+      restarting = false;
+      return;
+    }
+    try {
+      await client.startClient({
+        initialSyncLimit: params.initialSyncLimit ?? DEFAULT_SYNC_LIMIT,
+      });
+    } catch (startErr) {
+      restarting = false;
+      const error =
+        startErr instanceof Error ? startErr : new Error(String(startErr));
+      await scheduleRestart(error);
+      return;
+    }
+    restarting = false;
+  };
+
+  const onSync = (state: SyncState, _prev?: SyncState, data?: SyncStateData) => {
+    params.onSyncState?.(state, data);
+    const nextToken = data?.nextSyncToken?.trim();
+    if (nextToken) {
+      void writeMatrixSyncState({
+        accountId: params.accountId,
+        env: params.env,
+        homedir: params.homedir,
+        state: { nextBatch: nextToken },
+      });
+    }
+    if (state === SyncState.Error) {
+      const error =
+        data?.error instanceof Error
+          ? data.error
+          : new Error("Matrix sync error");
+      client.stopClient();
+      void scheduleRestart(error);
+    } else if (state === SyncState.Prepared || state === SyncState.Syncing) {
+      restartAttempt = 0;
+    }
+  };
+
+  client.on("Room.timeline", onTimeline);
+  client.on("sync", onSync);
+
+  const stopOnAbort = () => {
+    client.stopClient();
+  };
+  params.abortSignal?.addEventListener("abort", stopOnAbort, { once: true });
+
+  try {
+    await client.startClient({
+      initialSyncLimit: params.initialSyncLimit ?? DEFAULT_SYNC_LIMIT,
+    });
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    await scheduleRestart(error);
+  }
+}
+
+export function stopMatrixSync(client: MatrixClient): void {
+  client.stopClient();
+}
