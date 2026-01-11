@@ -43,6 +43,9 @@ export type ChannelSetupInput = {
   httpUrl?: string;
   httpHost?: string;
   httpPort?: string;
+  serverUrl?: string;
+  username?: string;
+  password?: string;
   useEnv?: boolean;
 };
 
