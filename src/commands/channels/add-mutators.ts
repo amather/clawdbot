@@ -40,6 +40,9 @@ export function applyChannelAccountConfig(params: {
   httpUrl?: string;
   httpHost?: string;
   httpPort?: string;
+  serverUrl?: string;
+  username?: string;
+  password?: string;
   useEnv?: boolean;
 }): ClawdbotConfig {
   const accountId = normalizeAccountId(params.accountId);
@@ -61,6 +64,9 @@ export function applyChannelAccountConfig(params: {
     httpUrl: params.httpUrl,
     httpHost: params.httpHost,
     httpPort: params.httpPort,
+    serverUrl: params.serverUrl,
+    username: params.username,
+    password: params.password,
     useEnv: params.useEnv,
   };
   return apply({ cfg: params.cfg, accountId, input });

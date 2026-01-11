@@ -23,6 +23,7 @@ import {
 import { formatPairingApproveHint } from "./helpers.js";
 import { resolveChannelMediaMaxBytes } from "./media-limits.js";
 import { normalizeMatrixMessagingTarget } from "./normalize-target.js";
+import { matrixOnboardingAdapter } from "./onboarding/matrix.js";
 import {
   applyAccountNameToChannelSection,
   migrateBaseNameToDefaultAccount,
@@ -46,6 +47,7 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
     media: true,
   },
   reload: { configPrefixes: ["channels.matrix"] },
+  onboarding: matrixOnboardingAdapter,
   config: {
     listAccountIds: (cfg) => listMatrixAccountIds(cfg),
     resolveAccount: (cfg, accountId) =>
@@ -242,6 +244,21 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
         messageId: result.eventId,
         conversationId: roomId,
       };
+    },
+  },
+  auth: {
+    login: async ({ cfg, accountId, runtime }) => {
+      const account = resolveMatrixAccount({ cfg, accountId });
+      if (!account.configured) {
+        throw new Error("Matrix account is missing serverUrl/username/password");
+      }
+      await createMatrixClient({
+        serverUrl: account.serverUrl,
+        username: account.username,
+        password: account.password,
+        accountId: account.accountId,
+      });
+      runtime.log(`Matrix login OK (${account.accountId}).`);
     },
   },
   status: {

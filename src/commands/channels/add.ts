@@ -32,6 +32,9 @@ export type ChannelsAddOptions = {
   httpUrl?: string;
   httpHost?: string;
   httpPort?: string;
+  serverUrl?: string;
+  username?: string;
+  password?: string;
   useEnv?: boolean;
 };
 
@@ -133,6 +136,9 @@ export async function channelsAddCommand(
       httpUrl: opts.httpUrl,
       httpHost: opts.httpHost,
       httpPort: opts.httpPort,
+      serverUrl: opts.serverUrl,
+      username: opts.username,
+      password: opts.password,
       useEnv,
     },
   });
@@ -160,6 +166,9 @@ export async function channelsAddCommand(
     httpUrl: opts.httpUrl,
     httpHost: opts.httpHost,
     httpPort: opts.httpPort,
+    serverUrl: opts.serverUrl,
+    username: opts.username,
+    password: opts.password,
     useEnv,
   });
 

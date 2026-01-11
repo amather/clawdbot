@@ -31,6 +31,9 @@ const optionNamesAdd = [
   "httpUrl",
   "httpHost",
   "httpPort",
+  "serverUrl",
+  "username",
+  "password",
   "useEnv",
 ] as const;
 
@@ -116,6 +119,9 @@ export function registerChannelsCli(program: Command) {
     .option("--http-url <url>", "Signal HTTP daemon base URL")
     .option("--http-host <host>", "Signal HTTP host")
     .option("--http-port <port>", "Signal HTTP port")
+    .option("--server-url <url>", "Matrix homeserver URL")
+    .option("--username <user>", "Matrix username (@user:server)")
+    .option("--password <password>", "Matrix password (or env:VAR)")
     .option("--use-env", "Use env token (default account only)", false)
     .action(async (opts, command) => {
       try {
