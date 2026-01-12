@@ -502,6 +502,17 @@ export async function monitorMatrixProvider(
       deliver: async (payload) => {
         await deliverReplies([payload], inbound.roomId);
       },
+      onReplyStart: async () => {
+        try {
+          await client.sendTyping(inbound.roomId, true, 20_000);
+        } catch (err) {
+          if (shouldLogVerbose()) {
+            runtime.error?.(
+              danger(`matrix typing failed: ${String(err)}`),
+            );
+          }
+        }
+      },
       onError: (err, info) => {
         runtime.error?.(
           danger(`matrix ${info.kind} reply failed: ${String(err)}`),
