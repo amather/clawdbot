@@ -11,6 +11,7 @@ If work is interrupted, restart from here and continue in order.
 - Matrix.Task-004.md — CLI + TUI setup flows and provider tooling
 - Matrix.Task-005.md — UI surfaces (web/macOS/mobile) and settings UX
 - Matrix.Task-006.md — End-to-end targeting, tests, docs, verification
+- Matrix.Task-007.md — Matrix E2EE support (crypto storage, device handling, decryption)
 
 ## Ordering rationale
 1) Lock in the library and config schema before touching provider logic.
@@ -19,6 +20,7 @@ If work is interrupted, restart from here and continue in order.
 4) Expose setup flows (CLI + TUI) so configuration can be driven interactively.
 5) Update UI surfaces to keep provider lists and forms in sync.
 6) Verify real targeting (Matrix user -> Clawdbot), then tests + docs.
+7) Add E2EE support (crypto store, decrypt inbound, key sharing).
 
 ## General rules
 - Always align implementation patterns with WhatsApp/Signal provider logic.
@@ -33,3 +35,4 @@ If work is interrupted, restart from here and continue in order.
 - [ ] Matrix.Task-004.md complete (CLI + TUI setup)
 - [ ] Matrix.Task-005.md complete (UI surfaces)
 - [ ] Matrix.Task-006.md complete (end-to-end targeting + tests/docs)
+- [ ] Matrix.Task-007.md complete (E2EE support)
