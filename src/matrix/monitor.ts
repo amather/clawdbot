@@ -22,7 +22,7 @@ import {
 } from "../pairing/pairing-store.js";
 import { resolveAgentRoute } from "../routing/resolve-route.js";
 import type { RuntimeEnv } from "../runtime.js";
-import { SyncState } from "matrix-js-sdk";
+import matrixSdk from "matrix-js-sdk/lib/matrix.js";
 
 import { resolveMatrixAccount } from "./accounts.js";
 import { createMatrixClient, startMatrixSync, stopMatrixSync } from "./client.js";
@@ -41,6 +41,10 @@ export type MonitorMatrixOpts = {
     lastError?: string | null;
     lastEventAt?: number | null;
   }) => void;
+};
+
+const { SyncState } = matrixSdk as {
+  SyncState: typeof import("matrix-js-sdk").SyncState;
 };
 
 function resolveRuntime(opts: MonitorMatrixOpts): RuntimeEnv {
@@ -242,6 +246,9 @@ export async function monitorMatrixProvider(
     if (inbound.media?.mxcUrl) {
       try {
         const url = client.mxcUrlToHttp(inbound.media.mxcUrl);
+        if (!url) {
+          throw new Error("Matrix media URL missing");
+        }
         const fetched = await fetchRemoteMedia({
           url,
           filePathHint: inbound.media.fileName,

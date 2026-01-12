@@ -1,12 +1,12 @@
 import {
   type MatrixClient,
-  MemoryStore,
-  createClient,
-  type SyncStateData,
-  SyncState,
   type MatrixEvent,
   type Room,
+  type SyncState as MatrixSyncState,
+  type SyncStateData,
 } from "matrix-js-sdk";
+import matrixSdk from "matrix-js-sdk/lib/matrix.js";
+import memoryStoreModule from "matrix-js-sdk/lib/store/memory.js";
 
 import { computeBackoff, sleepWithAbort } from "../infra/backoff.js";
 import {
@@ -24,6 +24,14 @@ const SYNC_BACKOFF = {
   factor: 1.8,
   jitter: 0.25,
 } as const;
+
+const { createClient, SyncState } = matrixSdk as {
+  createClient: typeof import("matrix-js-sdk").createClient;
+  SyncState: typeof import("matrix-js-sdk").SyncState;
+};
+const { MemoryStore } = memoryStoreModule as {
+  MemoryStore: typeof import("matrix-js-sdk").MemoryStore;
+};
 
 function normalizeServerUrl(raw: string): string {
   const trimmed = raw.trim();
@@ -119,7 +127,7 @@ export async function startMatrixSync(
     abortSignal?: AbortSignal;
     onEvent: (params: { event: MatrixEvent; room: Room }) => void;
     onError?: (err: Error) => void;
-    onSyncState?: (state: SyncState, data?: SyncStateData) => void;
+    onSyncState?: (state: MatrixSyncState, data?: SyncStateData) => void;
     env?: NodeJS.ProcessEnv;
     homedir?: () => string;
   },
@@ -139,7 +147,9 @@ export async function startMatrixSync(
   const onTimeline = (
     event: MatrixEvent,
     room: Room | undefined,
-    toStartOfTimeline: boolean,
+    toStartOfTimeline?: boolean,
+    _removed?: boolean,
+    _data?: unknown,
   ) => {
     if (!room || toStartOfTimeline) return;
     params.onEvent({ event, room });
@@ -176,7 +186,11 @@ export async function startMatrixSync(
     restarting = false;
   };
 
-  const onSync = (state: SyncState, _prev?: SyncState, data?: SyncStateData) => {
+  const onSync = (
+    state: MatrixSyncState,
+    _prev: MatrixSyncState | null,
+    data?: SyncStateData,
+  ) => {
     params.onSyncState?.(state, data);
     const nextToken = data?.nextSyncToken?.trim();
     if (nextToken) {
@@ -199,8 +213,11 @@ export async function startMatrixSync(
     }
   };
 
-  client.on("Room.timeline", onTimeline);
-  client.on("sync", onSync);
+  const emitter = client as unknown as {
+    on: (event: string, cb: (...args: unknown[]) => void) => void;
+  };
+  emitter.on("Room.timeline", onTimeline as (...args: unknown[]) => void);
+  emitter.on("sync", onSync as (...args: unknown[]) => void);
 
   const stopOnAbort = () => {
     client.stopClient();

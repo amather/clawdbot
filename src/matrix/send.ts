@@ -1,10 +1,21 @@
 import type { MatrixClient, UploadResponse } from "matrix-js-sdk";
+import matrixSdk from "matrix-js-sdk/lib/matrix.js";
 
 import { mediaKindFromMime } from "../media/constants.js";
 import { loadWebMedia } from "../web/media.js";
 
 type MatrixSendResult = {
   eventId: string;
+};
+
+type MatrixRoomMessageContent = {
+  msgtype: string;
+  body: string;
+  [key: string]: unknown;
+};
+
+const { EventType } = matrixSdk as {
+  EventType: typeof import("matrix-js-sdk").EventType;
 };
 
 function buildReplyRelation(replyToId?: string): Record<string, unknown> | undefined {
@@ -44,12 +55,13 @@ export async function sendMatrixText(params: {
     msgtype: "m.text",
     body,
     ...buildReplyRelation(params.replyToId),
-  };
-  const res = await params.client.sendEvent(
-    params.roomId,
-    "m.room.message",
-    content,
-  );
+  } as MatrixRoomMessageContent;
+  const sendEvent = params.client.sendEvent.bind(params.client) as (
+    roomId: string,
+    eventType: string,
+    content: Record<string, unknown>,
+  ) => Promise<{ event_id: string }>;
+  const res = await sendEvent(params.roomId, EventType.RoomMessage, content);
   return { eventId: res.event_id };
 }
 
@@ -105,7 +117,11 @@ export async function sendMatrixMedia(params: {
   replyToId?: string;
 }): Promise<MatrixSendResult> {
   const media = await loadWebMedia(params.mediaUrl, params.maxBytes);
-  const upload = await params.client.uploadContent(media.buffer, {
+  const arrayBuffer = media.buffer.buffer.slice(
+    media.buffer.byteOffset,
+    media.buffer.byteOffset + media.buffer.byteLength,
+  ) as ArrayBuffer;
+  const upload = await params.client.uploadContent(arrayBuffer, {
     type: media.contentType,
     name: media.fileName,
   });
@@ -134,11 +150,12 @@ export async function sendMatrixMedia(params: {
       size: media.buffer.length,
     },
     ...buildReplyRelation(params.replyToId),
-  };
-  const res = await params.client.sendEvent(
-    params.roomId,
-    "m.room.message",
-    content,
-  );
+  } as MatrixRoomMessageContent;
+  const sendEvent = params.client.sendEvent.bind(params.client) as (
+    roomId: string,
+    eventType: string,
+    content: Record<string, unknown>,
+  ) => Promise<{ event_id: string }>;
+  const res = await sendEvent(params.roomId, EventType.RoomMessage, content);
   return { eventId: res.event_id };
 }

@@ -867,11 +867,11 @@ export async function runTui(opts: TuiOptions) {
         void (async () => {
           try {
             const accountId =
-              plugin.setup.resolveAccountId?.({
+              setup.resolveAccountId?.({
                 cfg,
                 accountId: values.accountId,
               }) ?? normalizeAccountId(values.accountId);
-            const next = plugin.setup.applyAccountConfig({
+            const next = setup.applyAccountConfig({
               cfg,
               accountId,
               input: {
