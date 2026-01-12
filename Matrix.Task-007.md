@@ -33,13 +33,18 @@ and replies work in encrypted sessions.
 ## Implementation notes
 - Crypto store: `LocalStorageCryptoStore` over `MatrixFileStorage`
   (`~/.clawdbot/matrix/<account>/local-storage.json`).
+- Cross-signing + secret storage bootstrap on startup to self-verify the
+  Matrix device (removes "device not verified by its owner" warnings).
+- Secret storage key + cross-signing private keys cached to
+  `~/.clawdbot/matrix/<account>/crypto-secrets.json`.
 - Decrypt inbound events before mapping; drop messages that fail decryption.
 - Bot replies allow unverified devices (disable unknown-device errors).
 - Pairing required for DM replies when `dmPolicy=pairing` (default).
 - On DM send, prefetch devices + mark as known (best-effort) to reduce
   unknown-device send failures.
 - Added Matrix device reset action (gateway + UI/TUI), which clears
-  `auth.json`, `local-storage.json`, and `sync.json` for the account.
+  `auth.json`, `local-storage.json`, `sync.json`, `crypto-secrets.json`,
+  and the legacy `crypto/` store for the account.
 
 ## Debugging notes (2026-01-12)
 - IndexedDB shim + rust-crypto store threw `TransactionInactiveError`;
