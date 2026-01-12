@@ -17,7 +17,7 @@ export type ResolvedMatrixAccount = {
 };
 
 function listConfiguredAccountIds(cfg: ClawdbotConfig): string[] {
-  const accounts = cfg.matrix?.accounts;
+  const accounts = cfg.channels?.matrix?.accounts;
   if (!accounts || typeof accounts !== "object") return [];
   return Object.keys(accounts).filter(Boolean);
 }
@@ -38,7 +38,7 @@ function resolveAccountConfig(
   cfg: ClawdbotConfig,
   accountId: string,
 ): MatrixAccountConfig | undefined {
-  const accounts = cfg.matrix?.accounts;
+  const accounts = cfg.channels?.matrix?.accounts;
   if (!accounts || typeof accounts !== "object") return undefined;
   return accounts[accountId] as MatrixAccountConfig | undefined;
 }
@@ -47,7 +47,7 @@ function mergeMatrixAccountConfig(
   cfg: ClawdbotConfig,
   accountId: string,
 ): MatrixAccountConfig {
-  const { accounts: _ignored, ...base } = (cfg.matrix ??
+  const { accounts: _ignored, ...base } = (cfg.channels?.matrix ??
     {}) as MatrixAccountConfig & { accounts?: unknown };
   const account = resolveAccountConfig(cfg, accountId) ?? {};
   return { ...base, ...account };
@@ -58,7 +58,7 @@ export function resolveMatrixAccount(params: {
   accountId?: string | null;
 }): ResolvedMatrixAccount {
   const accountId = normalizeAccountId(params.accountId);
-  const baseEnabled = params.cfg.matrix?.enabled !== false;
+  const baseEnabled = params.cfg.channels?.matrix?.enabled !== false;
   const merged = mergeMatrixAccountConfig(params.cfg, accountId);
   const accountEnabled = merged.enabled !== false;
   const enabled = baseEnabled && accountEnabled;

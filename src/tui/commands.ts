@@ -47,6 +47,7 @@ export function getSlashCommands(
     { name: "session", description: "Switch session (or open picker)" },
     { name: "sessions", description: "Open session picker" },
     { name: "providers", description: "Configure chat providers" },
+    { name: "matrix-reset", description: "Reset Matrix device" },
     {
       name: "model",
       description: "Set model (or open picker)",
@@ -130,6 +131,7 @@ export function helpText(options: SlashCommandOptions = {}): string {
     "/agent <id> (or /agents)",
     "/session <key> (or /sessions)",
     "/providers",
+    "/matrix-reset",
     "/model <provider/model> (or /models)",
     `/think <${thinkLevels}>`,
     "/verbose <on|off>",

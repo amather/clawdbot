@@ -205,6 +205,13 @@ export class GatewayChatClient {
     return await this.client.request("status");
   }
 
+  async resetMatrixDevice(accountId?: string) {
+    return await this.client.request("channels.resetDevice", {
+      channel: "matrix",
+      accountId,
+    });
+  }
+
   async listModels(): Promise<GatewayModelChoice[]> {
     const res = await this.client.request<{ models?: GatewayModelChoice[] }>(
       "models.list",

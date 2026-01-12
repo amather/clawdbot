@@ -23,6 +23,7 @@ export type MatrixSyncState = {
 const AUTH_FILE = "auth.json";
 const SYNC_FILE = "sync.json";
 const STORAGE_FILE = "local-storage.json";
+const CRYPTO_DIR = "crypto";
 
 function resolveMatrixStateDir(params: {
   accountId?: string | null;
@@ -59,6 +60,15 @@ export function resolveMatrixStoragePath(params: {
   homedir?: () => string;
 }): string {
   return path.join(resolveMatrixStateDir(params), STORAGE_FILE);
+}
+
+function resolveMatrixCryptoPath(params: {
+  env?: NodeJS.ProcessEnv;
+  homedir?: () => string;
+}): string {
+  const env = params.env ?? process.env;
+  const homedir = params.homedir ?? os.homedir;
+  return path.join(resolveStateDir(env, homedir), "matrix", CRYPTO_DIR);
 }
 
 async function readJsonFile<T>(
@@ -129,6 +139,31 @@ export async function writeMatrixSyncState(params: {
   state: MatrixSyncState;
 }): Promise<void> {
   await writeJsonFile(resolveMatrixSyncPath(params), params.state);
+}
+
+export async function resetMatrixDeviceState(params: {
+  accountId?: string | null;
+  env?: NodeJS.ProcessEnv;
+  homedir?: () => string;
+}): Promise<{ removed: string[] }> {
+  const targets = [
+    resolveMatrixAuthPath(params),
+    resolveMatrixStoragePath(params),
+    resolveMatrixSyncPath(params),
+    resolveMatrixCryptoPath(params),
+  ];
+  const removed: string[] = [];
+  await Promise.all(
+    targets.map(async (target) => {
+      try {
+        await fs.promises.rm(target, { force: true, recursive: true });
+        removed.push(target);
+      } catch {
+        // ignore missing/locked state
+      }
+    }),
+  );
+  return { removed };
 }
 
 type StorageSnapshot = Record<string, string>;

@@ -11,6 +11,7 @@ import {
   formatThinkingLevels,
   normalizeUsageDisplay,
 } from "../auto-reply/thinking.js";
+import { resolveChannelDefaultAccountId } from "../channels/plugins/helpers.js";
 import { getChannelPlugin } from "../channels/plugins/index.js";
 import { listChatChannels } from "../channels/registry.js";
 import {
@@ -902,6 +903,71 @@ export async function runTui(opts: TuiOptions) {
     tui.requestRender();
   };
 
+  const resetMatrixDevice = async () => {
+    const snapshot = await readConfigFileSnapshot();
+    if (snapshot.exists && !snapshot.valid) {
+      chatLog.addSystem("config invalid: fix it before resetting matrix");
+      tui.requestRender();
+      return;
+    }
+    const cfg = snapshot.config ?? {};
+    const plugin = getChannelPlugin("matrix");
+    if (!plugin) {
+      chatLog.addSystem("matrix channel not available");
+      tui.requestRender();
+      return;
+    }
+    const accountIds = plugin.config.listAccountIds(cfg);
+    const accountId = resolveChannelDefaultAccountId({
+      plugin,
+      cfg,
+      accountIds,
+    });
+    const prompt = createSelectList(
+      [
+        {
+          value: "confirm",
+          label: "Reset Matrix device",
+          description:
+            "Clears local crypto state and re-logs in on next sync.",
+        },
+        { value: "cancel", label: "Cancel", description: "" },
+      ],
+      6,
+    );
+    prompt.onSelect = (item) => {
+      void (async () => {
+        closeOverlay();
+        if (item.value !== "confirm") {
+          chatLog.addSystem("Matrix reset cancelled.");
+          tui.requestRender();
+          return;
+        }
+        try {
+          const res = (await client.resetMatrixDevice(accountId)) as {
+            removed?: string[];
+          };
+          const removedCount = res?.removed?.length ?? 0;
+          chatLog.addSystem(
+            removedCount > 0
+              ? `Matrix device reset (${removedCount} files cleared).`
+              : "Matrix device reset.",
+          );
+        } catch (err) {
+          chatLog.addSystem(`Matrix reset failed: ${String(err)}`);
+        }
+        tui.requestRender();
+      })();
+    };
+    prompt.onCancel = () => {
+      closeOverlay();
+      chatLog.addSystem("Matrix reset cancelled.");
+      tui.requestRender();
+    };
+    openOverlay(prompt);
+    tui.requestRender();
+  };
+
   const openProviderSetup = async () => {
     const channels = listChatChannels();
     if (channels.length === 0) {
@@ -1024,6 +1090,9 @@ export async function runTui(opts: TuiOptions) {
         break;
       case "providers":
         await openProviderSetup();
+        break;
+      case "matrix-reset":
+        await resetMatrixDevice();
         break;
       case "model":
         if (!args) {

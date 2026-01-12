@@ -46,6 +46,8 @@ export type ConnectionsState = {
   matrixForm: MatrixForm;
   matrixSaving: boolean;
   matrixConfigStatus: string | null;
+  matrixResetting: boolean;
+  matrixResetStatus: string | null;
   imessageForm: IMessageForm;
   imessageSaving: boolean;
   imessageConfigStatus: string | null;
@@ -733,7 +735,8 @@ export async function saveMatrixConfig(state: ConnectionsState) {
   try {
     const base = state.configSnapshot?.config ?? {};
     const config = { ...base } as Record<string, unknown>;
-    const matrix = { ...(config.matrix ?? {}) } as Record<string, unknown>;
+    const channels = { ...(config.channels ?? {}) } as Record<string, unknown>;
+    const matrix = { ...(channels.matrix ?? {}) } as Record<string, unknown>;
     const accounts =
       matrix.accounts && typeof matrix.accounts === "object"
         ? ({ ...(matrix.accounts as Record<string, unknown>) } as Record<
@@ -786,9 +789,15 @@ export async function saveMatrixConfig(state: ConnectionsState) {
     }
 
     if (Object.keys(matrix).length > 0) {
-      config.matrix = matrix;
+      channels.matrix = matrix;
     } else {
-      delete config.matrix;
+      delete channels.matrix;
+    }
+
+    if (Object.keys(channels).length > 0) {
+      config.channels = channels;
+    } else {
+      delete config.channels;
     }
 
     const raw = `${JSON.stringify(config, null, 2).trimEnd()}\n`;
@@ -798,5 +807,28 @@ export async function saveMatrixConfig(state: ConnectionsState) {
     state.matrixConfigStatus = String(err);
   } finally {
     state.matrixSaving = false;
+  }
+}
+
+export async function resetMatrixDevice(state: ConnectionsState) {
+  if (!state.client || !state.connected) return;
+  if (state.matrixResetting) return;
+  state.matrixResetting = true;
+  state.matrixResetStatus = null;
+  try {
+    const accountId = state.matrixForm.accountId.trim() || "default";
+    const res = (await state.client.request("channels.resetDevice", {
+      channel: "matrix",
+      accountId,
+    })) as { removed?: string[] };
+    const removedCount = res?.removed?.length ?? 0;
+    state.matrixResetStatus =
+      removedCount > 0
+        ? `Matrix device reset. Cleared ${removedCount} files.`
+        : "Matrix device reset. Restart completed.";
+  } catch (err) {
+    state.matrixResetStatus = String(err);
+  } finally {
+    state.matrixResetting = false;
   }
 }

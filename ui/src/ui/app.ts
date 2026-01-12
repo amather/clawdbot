@@ -69,6 +69,7 @@ import {
   saveDiscordConfig,
   saveIMessageConfig,
   saveMatrixConfig,
+  resetMatrixDevice,
   saveSlackConfig,
   saveSignalConfig,
   saveTelegramConfig,
@@ -340,6 +341,8 @@ export class ClawdbotApp extends LitElement {
   };
   @state() matrixSaving = false;
   @state() matrixConfigStatus: string | null = null;
+  @state() matrixResetting = false;
+  @state() matrixResetStatus: string | null = null;
   @state() imessageForm: IMessageForm = {
     enabled: true,
     cliPath: "",
@@ -1205,7 +1208,19 @@ export class ClawdbotApp extends LitElement {
   async handleMatrixSave() {
     await saveMatrixConfig(this);
     await loadConfig(this);
-    await loadProviders(this, true);
+    await loadChannels(this, true);
+  }
+
+  async handleMatrixResetDevice() {
+    const confirmed = window.confirm(
+      "Reset the Matrix device? This clears local crypto state and forces a re-login.",
+    );
+    if (!confirmed) {
+      this.matrixResetStatus = "Reset cancelled.";
+      return;
+    }
+    await resetMatrixDevice(this);
+    await loadChannels(this, true);
   }
 
   // Sidebar handlers for tool output viewing

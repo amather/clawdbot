@@ -116,7 +116,10 @@ export function applyConfigSnapshot(state: ConfigState, snapshot: ConfigSnapshot
   const discord = (config.discord ?? {}) as Record<string, unknown>;
   const slack = (config.slack ?? {}) as Record<string, unknown>;
   const signal = (config.signal ?? {}) as Record<string, unknown>;
-  const matrix = (config.matrix ?? {}) as Record<string, unknown>;
+  const channels = (config.channels ?? {}) as Record<string, unknown>;
+  const matrix = (channels.matrix ??
+    (config as Record<string, unknown>).matrix ??
+    {}) as Record<string, unknown>;
   const imessage = (config.imessage ?? {}) as Record<string, unknown>;
   const toList = (value: unknown) =>
     Array.isArray(value)

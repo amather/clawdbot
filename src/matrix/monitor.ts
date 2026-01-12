@@ -181,7 +181,8 @@ export async function monitorMatrixProvider(
   const maxBytes = resolveProviderMediaMaxBytes({
     cfg,
     resolveProviderLimitMb: ({ cfg, accountId }) =>
-      cfg.matrix?.accounts?.[accountId]?.mediaMaxMb ?? cfg.matrix?.mediaMaxMb,
+      cfg.channels?.matrix?.accounts?.[accountId]?.mediaMaxMb ??
+      cfg.channels?.matrix?.mediaMaxMb,
     accountId: account.accountId,
   });
 

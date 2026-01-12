@@ -78,6 +78,8 @@ export type ConnectionsProps = {
   matrixForm: MatrixForm;
   matrixSaving: boolean;
   matrixStatus: string | null;
+  matrixResetting: boolean;
+  matrixResetStatus: string | null;
   imessageForm: IMessageForm;
   imessageSaving: boolean;
   imessageStatus: string | null;
@@ -95,6 +97,7 @@ export type ConnectionsProps = {
   onSignalSave: () => void;
   onMatrixChange: (patch: Partial<MatrixForm>) => void;
   onMatrixSave: () => void;
+  onMatrixResetDevice: () => void;
   onIMessageChange: (patch: Partial<IMessageForm>) => void;
   onIMessageSave: () => void;
 };
@@ -1841,6 +1844,11 @@ function renderChannel(
                 ${props.matrixStatus}
               </div>`
             : nothing}
+          ${props.matrixResetStatus
+            ? html`<div class="callout" style="margin-top: 12px;">
+                ${props.matrixResetStatus}
+              </div>`
+            : nothing}
 
           <div class="row" style="margin-top: 14px;">
             <button
@@ -1849,6 +1857,13 @@ function renderChannel(
               @click=${() => props.onMatrixSave()}
             >
               ${props.matrixSaving ? "Saving…" : "Save"}
+            </button>
+            <button
+              class="btn danger"
+              ?disabled=${props.matrixResetting}
+              @click=${() => props.onMatrixResetDevice()}
+            >
+              ${props.matrixResetting ? "Resetting…" : "Reset device"}
             </button>
             <button class="btn" @click=${() => props.onRefresh(true)}>
               Probe

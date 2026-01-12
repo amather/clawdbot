@@ -148,6 +148,8 @@ export type AppViewState = {
   matrixForm: MatrixForm;
   matrixSaving: boolean;
   matrixConfigStatus: string | null;
+  matrixResetting: boolean;
+  matrixResetStatus: string | null;
   imessageForm: IMessageForm;
   imessageSaving: boolean;
   imessageConfigStatus: string | null;
@@ -353,6 +355,8 @@ export function renderApp(state: AppViewState) {
               matrixForm: state.matrixForm,
               matrixSaving: state.matrixSaving,
               matrixStatus: state.matrixConfigStatus,
+              matrixResetting: state.matrixResetting,
+              matrixResetStatus: state.matrixResetStatus,
               imessageForm: state.imessageForm,
               imessageSaving: state.imessageSaving,
               imessageStatus: state.imessageConfigStatus,
@@ -370,6 +374,7 @@ export function renderApp(state: AppViewState) {
               onSignalSave: () => state.handleSignalSave(),
               onMatrixChange: (patch) => updateMatrixForm(state, patch),
               onMatrixSave: () => state.handleMatrixSave(),
+              onMatrixResetDevice: () => state.handleMatrixResetDevice(),
               onIMessageChange: (patch) => updateIMessageForm(state, patch),
               onIMessageSave: () => state.handleIMessageSave(),
             })
