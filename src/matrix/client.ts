@@ -13,9 +13,11 @@ import {
   loadMatrixStorage,
   readMatrixAuthState,
   readMatrixSyncState,
+  resolveMatrixCryptoStoreBasePath,
   writeMatrixAuthState,
   writeMatrixSyncState,
 } from "./state.js";
+import fs from "node:fs/promises";
 
 const DEFAULT_SYNC_LIMIT = 20;
 const SYNC_BACKOFF = {
@@ -32,6 +34,40 @@ const { createClient, SyncState } = matrixSdk as {
 const { MemoryStore } = memoryStoreModule as {
   MemoryStore: typeof import("matrix-js-sdk").MemoryStore;
 };
+
+let indexedDbReady = false;
+
+async function ensureMatrixIndexedDb(params: {
+  env?: NodeJS.ProcessEnv;
+  homedir?: () => string;
+}): Promise<void> {
+  if (indexedDbReady) return;
+  if (typeof globalThis.indexedDB !== "undefined") {
+    indexedDbReady = true;
+    return;
+  }
+  const basePath = resolveMatrixCryptoStoreBasePath({
+    env: params.env,
+    homedir: params.homedir,
+  });
+  await fs.mkdir(basePath, { recursive: true, mode: 0o700 });
+  if (!("window" in globalThis)) {
+    (globalThis as typeof globalThis & { window: typeof globalThis }).window =
+      globalThis;
+  }
+  if (!("location" in globalThis)) {
+    (globalThis as typeof globalThis & { location: { origin: string } }).location =
+      { origin: "file:///" };
+  }
+  const module = await import("indexeddbshim/src/node-UnicodeIdentifiers");
+  const setGlobalVars =
+    "default" in module ? module.default : (module as unknown as () => void);
+  setGlobalVars(undefined, {
+    databaseBasePath: basePath,
+    checkOrigin: false,
+  });
+  indexedDbReady = true;
+}
 
 function normalizeServerUrl(raw: string): string {
   const trimmed = raw.trim();
@@ -63,6 +99,15 @@ export async function createMatrixClient(params: {
 }): Promise<MatrixClient> {
   const serverUrl = normalizeServerUrl(params.serverUrl);
   const env = params.env ?? process.env;
+  try {
+    await ensureMatrixIndexedDb({ env, homedir: params.homedir });
+  } catch (err) {
+    console.warn(
+      `[matrix] IndexedDB shim init failed; continuing with in-memory crypto store: ${String(
+        err,
+      )}`,
+    );
+  }
   const storage = await loadMatrixStorage({
     accountId: params.accountId,
     env,
@@ -115,7 +160,16 @@ export async function createMatrixClient(params: {
     deviceId: deviceId || undefined,
     store,
   });
-  await client.initRustCrypto({ useIndexedDB: false });
+  try {
+    await client.initRustCrypto({ useIndexedDB: true });
+  } catch (err) {
+    console.warn(
+      `[matrix] Rust crypto store init failed; falling back to in-memory store: ${String(
+        err,
+      )}`,
+    );
+    await client.initRustCrypto({ useIndexedDB: false });
+  }
   return client;
 }
 

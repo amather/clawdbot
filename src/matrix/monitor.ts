@@ -270,6 +270,27 @@ export async function monitorMatrixProvider(
     event: Parameters<typeof mapMatrixInboundEvent>[0]["event"];
     room: Parameters<typeof mapMatrixInboundEvent>[0]["room"];
   }) => {
+    if (typeof client.decryptEventIfNeeded === "function") {
+      try {
+        await client.decryptEventIfNeeded(payload.event);
+      } catch (err) {
+        const failed = payload.event.isDecryptionFailure?.() ?? false;
+        if (shouldLogVerbose() || failed) {
+          runtime.error?.(
+            danger(
+              `matrix decrypt failed (${payload.event.getId?.() ?? "unknown"}): ${String(err)}`,
+            ),
+          );
+        }
+        if (failed) return;
+      }
+    }
+    if (payload.event.isDecryptionFailure?.()) {
+      logVerbose(
+        `matrix decrypt failed (${payload.event.getId?.() ?? "unknown"}): missing keys`,
+      );
+      return;
+    }
     const inbound = mapMatrixInboundEvent({
       event: payload.event,
       room: payload.room,
