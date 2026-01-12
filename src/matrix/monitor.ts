@@ -5,7 +5,7 @@ import {
 import { chunkText, resolveTextChunkLimit } from "../auto-reply/chunk.js";
 import { formatAgentEnvelope } from "../auto-reply/envelope.js";
 import { dispatchReplyFromConfig } from "../auto-reply/reply/dispatch-from-config.js";
-import { createReplyDispatcher } from "../auto-reply/reply/reply-dispatcher.js";
+import { createReplyDispatcherWithTyping } from "../auto-reply/reply/reply-dispatcher.js";
 import type { ReplyPayload } from "../auto-reply/types.js";
 import type { ClawdbotConfig } from "../config/config.js";
 import { loadConfig } from "../config/config.js";
@@ -30,6 +30,7 @@ import { createMatrixClient, startMatrixSync, stopMatrixSync } from "./client.js
 import { mapMatrixInboundEvent } from "./inbound.js";
 import { decryptMatrixAttachment } from "./media.js";
 import { sendMatrixMedia, sendMatrixText } from "./send.js";
+import { readMatrixSyncState, updateMatrixSyncState } from "./state.js";
 import { resolveProviderMediaMaxBytes } from "../providers/plugins/media-limits.js";
 
 export type MonitorMatrixOpts = {
@@ -191,6 +192,26 @@ export async function monitorMatrixProvider(
   const autoJoinAllowlist = normalizeAutoJoinAllowlist(
     account.config.autoJoinRooms ?? [],
   );
+  const syncState = await readMatrixSyncState({ accountId: account.accountId });
+  const hasSyncToken = Boolean(syncState?.nextBatch);
+  const startupCutoff = Date.now();
+  const lastEventTsByRoom = { ...(syncState?.lastEventTsByRoom ?? {}) };
+  const recordInboundTimestamp = async (roomId: string, timestamp?: number) => {
+    if (!timestamp) return;
+    const lastSeen = lastEventTsByRoom[roomId] ?? 0;
+    if (timestamp <= lastSeen) return;
+    lastEventTsByRoom[roomId] = timestamp;
+    await updateMatrixSyncState({
+      accountId: account.accountId,
+      patch: (prev) => ({
+        ...(prev ?? {}),
+        lastEventTsByRoom: {
+          ...(prev?.lastEventTsByRoom ?? {}),
+          [roomId]: timestamp,
+        },
+      }),
+    });
+  };
 
   const fetchMatrixMedia = async (mxcUrl: string, fileName?: string) => {
     const trimmed = mxcUrl.trim();
@@ -321,6 +342,25 @@ export async function monitorMatrixProvider(
     });
     if (!inbound) return;
     if (inbound.senderId === selfId) return;
+    const lastSeen = lastEventTsByRoom[inbound.roomId];
+    if (inbound.timestamp && lastSeen && inbound.timestamp <= lastSeen) {
+      logVerbose(
+        `matrix: skip old message ${inbound.eventId ?? "unknown"} (ts=${inbound.timestamp}, last=${lastSeen})`,
+      );
+      return;
+    }
+    if (
+      inbound.timestamp &&
+      !hasSyncToken &&
+      !lastSeen &&
+      inbound.timestamp < startupCutoff
+    ) {
+      logVerbose(
+        `matrix: skip pre-start message ${inbound.eventId ?? "unknown"} (ts=${inbound.timestamp})`,
+      );
+      return;
+    }
+    await recordInboundTimestamp(inbound.roomId, inbound.timestamp);
 
     const joinedCount = payload.room.getJoinedMemberCount();
     const isDirect = joinedCount <= 2;
@@ -495,7 +535,8 @@ export async function monitorMatrixProvider(
       );
     }
 
-    const dispatcher = createReplyDispatcher({
+    const { dispatcher, replyOptions, markDispatchIdle } =
+      createReplyDispatcherWithTyping({
       responsePrefix: resolveEffectiveMessagesConfig(cfg, route.agentId)
         .responsePrefix,
       humanDelay: resolveHumanDelayConfig(cfg, route.agentId),
@@ -518,13 +559,24 @@ export async function monitorMatrixProvider(
           danger(`matrix ${info.kind} reply failed: ${String(err)}`),
         );
       },
-    });
+      onIdle: () => {
+        void client.sendTyping(inbound.roomId, false).catch((err) => {
+          if (shouldLogVerbose()) {
+            runtime.error?.(
+              danger(`matrix typing stop failed: ${String(err)}`),
+            );
+          }
+        });
+      },
+      });
 
     await dispatchReplyFromConfig({
       ctx: ctxPayload,
       cfg,
       dispatcher,
+      replyOptions,
     });
+    markDispatchIdle();
   };
 
   const emitter = client as unknown as {

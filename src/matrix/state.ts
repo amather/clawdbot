@@ -18,6 +18,7 @@ export type MatrixAuthState = {
 
 export type MatrixSyncState = {
   nextBatch?: string;
+  lastEventTsByRoom?: Record<string, number>;
 };
 
 export type MatrixCryptoState = {
@@ -158,6 +159,23 @@ export async function writeMatrixSyncState(params: {
   state: MatrixSyncState;
 }): Promise<void> {
   await writeJsonFile(resolveMatrixSyncPath(params), params.state);
+}
+
+export async function updateMatrixSyncState(params: {
+  accountId?: string | null;
+  env?: NodeJS.ProcessEnv;
+  homedir?: () => string;
+  patch: (prev: MatrixSyncState | null) => MatrixSyncState;
+}): Promise<MatrixSyncState> {
+  const prev = await readMatrixSyncState(params);
+  const next = params.patch(prev);
+  await writeMatrixSyncState({
+    accountId: params.accountId,
+    env: params.env,
+    homedir: params.homedir,
+    state: next,
+  });
+  return next;
 }
 
 export async function readMatrixCryptoState(params: {

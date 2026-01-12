@@ -21,7 +21,7 @@ import {
   type MatrixCryptoState,
   writeMatrixAuthState,
   writeMatrixCryptoState,
-  writeMatrixSyncState,
+  updateMatrixSyncState,
 } from "./state.js";
 
 const DEFAULT_SYNC_LIMIT = 20;
@@ -355,11 +355,14 @@ export async function startMatrixSync(
     params.onSyncState?.(state, data);
     const nextToken = data?.nextSyncToken?.trim();
     if (nextToken) {
-      void writeMatrixSyncState({
+      void updateMatrixSyncState({
         accountId: params.accountId,
         env: params.env,
         homedir: params.homedir,
-        state: { nextBatch: nextToken },
+        patch: (prev) => ({
+          ...(prev ?? {}),
+          nextBatch: nextToken,
+        }),
       });
     }
     if (state === SyncState.Error) {

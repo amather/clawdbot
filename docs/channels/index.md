@@ -16,6 +16,7 @@ Text is supported everywhere; media and reactions vary by channel.
 - [Discord](/channels/discord) — Discord Bot API + Gateway; supports servers, channels, and DMs.
 - [Slack](/channels/slack) — Bolt SDK; workspace apps.
 - [Signal](/channels/signal) — signal-cli; privacy-focused.
+- [Matrix](/channels/matrix) — Matrix homeserver via matrix-js-sdk.
 - [iMessage](/channels/imessage) — macOS only; native integration.
 - [Microsoft Teams](/channels/msteams) — Bot Framework; enterprise support.
 - [WebChat](/web/webchat) — Gateway WebChat UI over WebSocket.
