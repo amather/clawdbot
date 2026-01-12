@@ -38,6 +38,8 @@ and replies work in encrypted sessions.
 - Pairing required for DM replies when `dmPolicy=pairing` (default).
 - On DM send, prefetch devices + mark as known (best-effort) to reduce
   unknown-device send failures.
+- Added Matrix device reset action (gateway + UI/TUI), which clears
+  `auth.json`, `local-storage.json`, and `sync.json` for the account.
 
 ## Debugging notes (2026-01-12)
 - IndexedDB shim + rust-crypto store threw `TransactionInactiveError`;
@@ -49,6 +51,7 @@ and replies work in encrypted sessions.
   - `This message was sent before this device logged in, and there is no key backup.`
 - Suggested UI/TUI action: expose "Reset Matrix device" (re-login) and
   instructions for key sharing/verification.
+  Reset should clear both auth and crypto store files for a clean device.
   Also consider a toggle for "Allow unverified devices" to document the
   default behavior of sending despite unknown devices.
 
