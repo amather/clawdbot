@@ -20,10 +20,21 @@ export type MatrixSyncState = {
   nextBatch?: string;
 };
 
+export type MatrixCryptoState = {
+  crossSigningKeys?: Partial<
+    Record<"master" | "self_signing" | "user_signing", string>
+  >;
+  secretStorageKey?: {
+    keyId?: string;
+    privateKey?: string;
+  };
+};
+
 const AUTH_FILE = "auth.json";
 const SYNC_FILE = "sync.json";
 const STORAGE_FILE = "local-storage.json";
 const CRYPTO_DIR = "crypto";
+const SECRETS_FILE = "crypto-secrets.json";
 
 function resolveMatrixStateDir(params: {
   accountId?: string | null;
@@ -60,6 +71,14 @@ export function resolveMatrixStoragePath(params: {
   homedir?: () => string;
 }): string {
   return path.join(resolveMatrixStateDir(params), STORAGE_FILE);
+}
+
+function resolveMatrixSecretsPath(params: {
+  accountId?: string | null;
+  env?: NodeJS.ProcessEnv;
+  homedir?: () => string;
+}): string {
+  return path.join(resolveMatrixStateDir(params), SECRETS_FILE);
 }
 
 function resolveMatrixCryptoPath(params: {
@@ -141,6 +160,27 @@ export async function writeMatrixSyncState(params: {
   await writeJsonFile(resolveMatrixSyncPath(params), params.state);
 }
 
+export async function readMatrixCryptoState(params: {
+  accountId?: string | null;
+  env?: NodeJS.ProcessEnv;
+  homedir?: () => string;
+}): Promise<MatrixCryptoState | null> {
+  const { value } = await readJsonFile<MatrixCryptoState | null>(
+    resolveMatrixSecretsPath(params),
+    null,
+  );
+  return value && typeof value === "object" ? value : null;
+}
+
+export async function writeMatrixCryptoState(params: {
+  accountId?: string | null;
+  env?: NodeJS.ProcessEnv;
+  homedir?: () => string;
+  state: MatrixCryptoState;
+}): Promise<void> {
+  await writeJsonFile(resolveMatrixSecretsPath(params), params.state);
+}
+
 export async function resetMatrixDeviceState(params: {
   accountId?: string | null;
   env?: NodeJS.ProcessEnv;
@@ -150,6 +190,7 @@ export async function resetMatrixDeviceState(params: {
     resolveMatrixAuthPath(params),
     resolveMatrixStoragePath(params),
     resolveMatrixSyncPath(params),
+    resolveMatrixSecretsPath(params),
     resolveMatrixCryptoPath(params),
   ];
   const removed: string[] = [];

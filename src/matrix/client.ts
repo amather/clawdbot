@@ -1,4 +1,7 @@
+import crypto from "node:crypto";
+
 import {
+  type CryptoCallbacks,
   type MatrixClient,
   type MatrixEvent,
   type Room,
@@ -12,9 +15,12 @@ import memoryStoreModule from "matrix-js-sdk/lib/store/memory.js";
 import { computeBackoff, sleepWithAbort } from "../infra/backoff.js";
 import {
   loadMatrixStorage,
+  readMatrixCryptoState,
   readMatrixAuthState,
   readMatrixSyncState,
+  type MatrixCryptoState,
   writeMatrixAuthState,
+  writeMatrixCryptoState,
   writeMatrixSyncState,
 } from "./state.js";
 
@@ -66,6 +72,60 @@ function resolveEnvValue(
   return value?.trim() ?? "";
 }
 
+async function ensureMatrixVerificationReady(params: {
+  client: MatrixClient;
+  userId: string;
+  password: string;
+}): Promise<void> {
+  const { client, userId, password } = params;
+  let needsSecretStorage = false;
+  let needsCrossSigning = false;
+
+  try {
+    needsSecretStorage = !(await client.isSecretStorageReady());
+  } catch {
+    needsSecretStorage = false;
+  }
+
+  try {
+    needsCrossSigning = !(await client.isCrossSigningReady());
+  } catch {
+    needsCrossSigning = false;
+  }
+
+  if (needsSecretStorage) {
+    await client.bootstrapSecretStorage({
+      createSecretStorageKey: async () => ({
+        keyInfo: { name: "Clawdbot" },
+        privateKey: crypto.randomBytes(32),
+      }),
+    });
+  }
+
+  if (!needsCrossSigning) return;
+  if (!password) {
+    throw new Error("Matrix password is required for cross-signing setup");
+  }
+
+  await client.downloadKeys([userId], true);
+  await client.bootstrapCrossSigning({
+    authUploadDeviceSigningKeys: async (makeRequest) => {
+      try {
+        await makeRequest(null);
+        return;
+      } catch (err) {
+        const session = (err as { data?: { session?: string } })?.data?.session;
+        await makeRequest({
+          type: "m.login.password",
+          identifier: { type: "m.id.user", user: userId },
+          password,
+          ...(session ? { session } : {}),
+        });
+      }
+    },
+  });
+}
+
 export async function createMatrixClient(params: {
   serverUrl: string;
   username: string;
@@ -77,6 +137,7 @@ export async function createMatrixClient(params: {
 }): Promise<MatrixClient> {
   const serverUrl = normalizeServerUrl(params.serverUrl);
   const env = params.env ?? process.env;
+  const resolvedPassword = resolveEnvValue(params.password, env);
   const storage = await loadMatrixStorage({
     accountId: params.accountId,
     env,
@@ -84,6 +145,73 @@ export async function createMatrixClient(params: {
   });
   const store = new MemoryStore({ localStorage: storage });
   const cryptoStore = new LocalStorageCryptoStore(storage);
+  let cryptoState: MatrixCryptoState =
+    (await readMatrixCryptoState({
+      accountId: params.accountId,
+      env,
+      homedir: params.homedir,
+    })) ?? {};
+
+  const persistCryptoState = (patch: MatrixCryptoState): void => {
+    cryptoState = {
+      ...cryptoState,
+      ...patch,
+      crossSigningKeys: {
+        ...cryptoState.crossSigningKeys,
+        ...patch.crossSigningKeys,
+      },
+      secretStorageKey: {
+        ...cryptoState.secretStorageKey,
+        ...patch.secretStorageKey,
+      },
+    };
+    void writeMatrixCryptoState({
+      accountId: params.accountId,
+      env,
+      homedir: params.homedir,
+      state: cryptoState,
+    });
+  };
+
+  const encodeKey = (value: Uint8Array): string =>
+    Buffer.from(value).toString("base64");
+  const decodeKey = (value?: string): Uint8Array | null => {
+    if (!value) return null;
+    return Uint8Array.from(Buffer.from(value, "base64"));
+  };
+
+  const cryptoCallbacks = {
+    getCrossSigningKey: async (type) => {
+      const stored = cryptoState.crossSigningKeys?.[
+        type as "master" | "self_signing" | "user_signing"
+      ];
+      return decodeKey(stored);
+    },
+    saveCrossSigningKeys: (keys) => {
+      const next: MatrixCryptoState["crossSigningKeys"] = {};
+      for (const [keyType, keyValue] of Object.entries(keys)) {
+        next[keyType as "master" | "self_signing" | "user_signing"] =
+          encodeKey(keyValue);
+      }
+      persistCryptoState({ crossSigningKeys: next });
+    },
+    getSecretStorageKey: async ({ keys }) => {
+      const storedKey = decodeKey(cryptoState.secretStorageKey?.privateKey);
+      if (!storedKey) return null;
+      const storedKeyId = cryptoState.secretStorageKey?.keyId;
+      if (storedKeyId && keys[storedKeyId]) {
+        return [storedKeyId, storedKey] as const;
+      }
+      const candidates = Object.keys(keys);
+      if (candidates.length !== 1) return null;
+      return [candidates[0], storedKey] as const;
+    },
+    cacheSecretStorageKey: (keyId, _keyInfo, key) => {
+      persistCryptoState({
+        secretStorageKey: { keyId, privateKey: encodeKey(key) },
+      });
+    },
+  } satisfies CryptoCallbacks;
 
   const cached = await readMatrixAuthState({
     accountId: params.accountId,
@@ -95,14 +223,13 @@ export async function createMatrixClient(params: {
   let deviceId = params.deviceId?.trim() || cached?.deviceId?.trim() || "";
 
   if (!accessToken || !userId || cached?.serverUrl !== serverUrl) {
-    const password = resolveEnvValue(params.password, env);
-    if (!password) {
+    if (!resolvedPassword) {
       throw new Error("Matrix password is required");
     }
     const loginClient = createClient({ baseUrl: serverUrl });
     const login = await loginClient.loginWithPassword(
       params.username,
-      password,
+      resolvedPassword,
     );
     accessToken = login.access_token;
     userId = login.user_id;
@@ -130,11 +257,23 @@ export async function createMatrixClient(params: {
     deviceId: deviceId || undefined,
     store,
     cryptoStore,
+    cryptoCallbacks,
   });
   await ensureOlmLoaded();
   await client.initCrypto();
   // Allow sending to unverified devices; align with other providers' defaults.
   client.setGlobalErrorOnUnknownDevices(false);
+  try {
+    await ensureMatrixVerificationReady({
+      client,
+      userId,
+      password: resolvedPassword,
+    });
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Matrix self-verification failed";
+    console.warn(`[matrix] ${message}`);
+  }
   return client;
 }
 
