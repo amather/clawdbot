@@ -23,7 +23,6 @@ export type MatrixSyncState = {
 const AUTH_FILE = "auth.json";
 const SYNC_FILE = "sync.json";
 const STORAGE_FILE = "local-storage.json";
-const CRYPTO_DIR = "crypto";
 
 function resolveMatrixStateDir(params: {
   accountId?: string | null;
@@ -60,13 +59,6 @@ export function resolveMatrixStoragePath(params: {
   homedir?: () => string;
 }): string {
   return path.join(resolveMatrixStateDir(params), STORAGE_FILE);
-}
-
-export function resolveMatrixCryptoStoreBasePath(params: {
-  env?: NodeJS.ProcessEnv;
-  homedir?: () => string;
-}): string {
-  return path.join(resolveStateDir(params.env, params.homedir), "matrix", CRYPTO_DIR);
 }
 
 async function readJsonFile<T>(
