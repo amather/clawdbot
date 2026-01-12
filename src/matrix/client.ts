@@ -102,28 +102,31 @@ async function ensureMatrixVerificationReady(params: {
     });
   }
 
-  if (!needsCrossSigning) return;
-  if (!password) {
-    throw new Error("Matrix password is required for cross-signing setup");
+  if (needsCrossSigning) {
+    if (!password) {
+      throw new Error("Matrix password is required for cross-signing setup");
+    }
+    await client.downloadKeys([userId], true);
+    await client.bootstrapCrossSigning({
+      authUploadDeviceSigningKeys: async (makeRequest) => {
+        try {
+          await makeRequest(null);
+          return;
+        } catch (err) {
+          const session = (err as { data?: { session?: string } })?.data
+            ?.session;
+          await makeRequest({
+            type: "m.login.password",
+            identifier: { type: "m.id.user", user: userId },
+            password,
+            ...(session ? { session } : {}),
+          });
+        }
+      },
+    });
   }
 
-  await client.downloadKeys([userId], true);
-  await client.bootstrapCrossSigning({
-    authUploadDeviceSigningKeys: async (makeRequest) => {
-      try {
-        await makeRequest(null);
-        return;
-      } catch (err) {
-        const session = (err as { data?: { session?: string } })?.data?.session;
-        await makeRequest({
-          type: "m.login.password",
-          identifier: { type: "m.id.user", user: userId },
-          password,
-          ...(session ? { session } : {}),
-        });
-      }
-    },
-  });
+  await client.checkOwnCrossSigningTrust({ allowPrivateKeyRequests: true });
 }
 
 export async function createMatrixClient(params: {
