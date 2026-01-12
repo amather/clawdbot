@@ -133,6 +133,8 @@ export async function createMatrixClient(params: {
   });
   await ensureOlmLoaded();
   await client.initCrypto();
+  // Allow sending to unverified devices; align with other providers' defaults.
+  client.setGlobalErrorOnUnknownDevices(false);
   return client;
 }
 

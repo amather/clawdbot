@@ -18,6 +18,41 @@ const { EventType } = matrixSdk as {
   EventType: typeof import("matrix-js-sdk").EventType;
 };
 
+async function ensureKnownDevices(params: {
+  client: MatrixClient;
+  roomId: string;
+}): Promise<void> {
+  if (!params.client.isCryptoEnabled?.()) return;
+  const room = params.client.getRoom(params.roomId);
+  if (!room?.getJoinedMembers) return;
+  const joined = room.getJoinedMembers();
+  if (joined.length > 4) return;
+  const userIds = Array.from(
+    new Set(joined.map((member) => member.userId).filter(Boolean)),
+  );
+  if (userIds.length === 0) return;
+  try {
+    await params.client.downloadKeys(userIds, true);
+  } catch {
+    return;
+  }
+  for (const userId of userIds) {
+    let devices: { deviceId: string }[] = [];
+    try {
+      devices = params.client.getStoredDevicesForUser(userId);
+    } catch {
+      continue;
+    }
+    for (const device of devices) {
+      try {
+        await params.client.setDeviceKnown(userId, device.deviceId, true);
+      } catch {
+        // Best effort: allow send to proceed if devices can't be marked.
+      }
+    }
+  }
+}
+
 function buildReplyRelation(replyToId?: string): Record<string, unknown> | undefined {
   const id = replyToId?.trim();
   if (!id) return undefined;
@@ -51,6 +86,7 @@ export async function sendMatrixText(params: {
   if (!body.trim()) {
     throw new Error("Matrix send requires non-empty text");
   }
+  await ensureKnownDevices({ client: params.client, roomId: params.roomId });
   const content = {
     msgtype: "m.text",
     body,
@@ -116,6 +152,7 @@ export async function sendMatrixMedia(params: {
   maxBytes?: number;
   replyToId?: string;
 }): Promise<MatrixSendResult> {
+  await ensureKnownDevices({ client: params.client, roomId: params.roomId });
   const media = await loadWebMedia(params.mediaUrl, params.maxBytes);
   const arrayBuffer = media.buffer.buffer.slice(
     media.buffer.byteOffset,
