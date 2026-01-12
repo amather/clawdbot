@@ -555,6 +555,7 @@ const MatrixAccountSchemaBase = z.object({
   serverUrl: z.string().optional(),
   username: z.string().optional(),
   password: z.string().optional(),
+  autoJoinRooms: z.array(z.string()).optional(),
   dmPolicy: DmPolicySchema.optional().default("pairing"),
   allowFrom: z.array(z.union([z.string(), z.number()])).optional(),
   textChunkLimit: z.number().int().positive().optional(),

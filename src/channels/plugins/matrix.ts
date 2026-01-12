@@ -66,7 +66,13 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
         cfg,
         sectionKey: "matrix",
         accountId,
-        clearBaseFields: ["serverUrl", "username", "password", "name"],
+        clearBaseFields: [
+          "serverUrl",
+          "username",
+          "password",
+          "name",
+          "autoJoinRooms",
+        ],
       }),
     isConfigured: (account) => account.configured,
     describeAccount: (account) => ({
@@ -133,6 +139,10 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
         accountId,
         name: input.name,
       });
+      const autoJoinRooms =
+        Array.isArray(input.autoJoinRooms) && input.autoJoinRooms.length > 0
+          ? input.autoJoinRooms
+          : undefined;
       const next =
         accountId !== DEFAULT_ACCOUNT_ID
           ? migrateBaseNameToDefaultAccount({
@@ -151,6 +161,7 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
               serverUrl: input.serverUrl ?? next.channels?.matrix?.serverUrl,
               username: input.username ?? next.channels?.matrix?.username,
               password: input.password ?? next.channels?.matrix?.password,
+              ...(autoJoinRooms ? { autoJoinRooms } : {}),
             },
           },
         };
@@ -170,6 +181,7 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
                 ...(input.serverUrl ? { serverUrl: input.serverUrl } : {}),
                 ...(input.username ? { username: input.username } : {}),
                 ...(input.password ? { password: input.password } : {}),
+                ...(autoJoinRooms ? { autoJoinRooms } : {}),
               },
             },
           },

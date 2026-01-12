@@ -12,6 +12,7 @@ import {
   type DiscordGuildChannelForm,
   type DiscordGuildForm,
   type IMessageForm,
+  type MatrixForm,
   type SlackChannelForm,
   type SlackForm,
   type SignalForm,
@@ -42,11 +43,13 @@ export type ConfigState = {
   discordForm: DiscordForm;
   slackForm: SlackForm;
   signalForm: SignalForm;
+  matrixForm: MatrixForm;
   imessageForm: IMessageForm;
   telegramConfigStatus: string | null;
   discordConfigStatus: string | null;
   slackConfigStatus: string | null;
   signalConfigStatus: string | null;
+  matrixConfigStatus: string | null;
   imessageConfigStatus: string | null;
 };
 
@@ -113,6 +116,7 @@ export function applyConfigSnapshot(state: ConfigState, snapshot: ConfigSnapshot
   const discord = (config.discord ?? {}) as Record<string, unknown>;
   const slack = (config.slack ?? {}) as Record<string, unknown>;
   const signal = (config.signal ?? {}) as Record<string, unknown>;
+  const matrix = (config.matrix ?? {}) as Record<string, unknown>;
   const imessage = (config.imessage ?? {}) as Record<string, unknown>;
   const toList = (value: unknown) =>
     Array.isArray(value)
@@ -359,6 +363,37 @@ export function applyConfigSnapshot(state: ConfigState, snapshot: ConfigSnapshot
       typeof signal.mediaMaxMb === "number" ? String(signal.mediaMaxMb) : "",
   };
 
+  const matrixAccounts =
+    matrix.accounts && typeof matrix.accounts === "object"
+      ? (matrix.accounts as Record<string, unknown>)
+      : {};
+  const matrixAccountIds = Object.keys(matrixAccounts).filter(Boolean);
+  const matrixAccountId = matrixAccountIds.includes("default")
+    ? "default"
+    : matrixAccountIds[0] ?? "default";
+  const matrixAccount =
+    matrixAccounts[matrixAccountId] && typeof matrixAccounts[matrixAccountId] === "object"
+      ? (matrixAccounts[matrixAccountId] as Record<string, unknown>)
+      : {};
+  const matrixBase = { ...matrix };
+  delete matrixBase.accounts;
+  const matrixMerged = { ...matrixBase, ...matrixAccount };
+  const matrixBaseEnabled =
+    typeof matrix.enabled === "boolean" ? matrix.enabled : true;
+  const matrixAccountEnabled =
+    typeof matrixAccount.enabled === "boolean" ? matrixAccount.enabled : true;
+  state.matrixForm = {
+    accountId: matrixAccountId,
+    enabled: matrixBaseEnabled && matrixAccountEnabled,
+    serverUrl:
+      typeof matrixMerged.serverUrl === "string" ? matrixMerged.serverUrl : "",
+    username:
+      typeof matrixMerged.username === "string" ? matrixMerged.username : "",
+    password:
+      typeof matrixMerged.password === "string" ? matrixMerged.password : "",
+    autoJoinRooms: toList(matrixMerged.autoJoinRooms),
+  };
+
   state.imessageForm = {
     enabled: typeof imessage.enabled === "boolean" ? imessage.enabled : true,
     cliPath: typeof imessage.cliPath === "string" ? imessage.cliPath : "",
@@ -384,6 +419,7 @@ export function applyConfigSnapshot(state: ConfigState, snapshot: ConfigSnapshot
   state.discordConfigStatus = configInvalid;
   state.slackConfigStatus = configInvalid;
   state.signalConfigStatus = configInvalid;
+  state.matrixConfigStatus = configInvalid;
   state.imessageConfigStatus = configInvalid;
 
   if (!state.configFormDirty) {

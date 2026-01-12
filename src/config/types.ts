@@ -739,6 +739,12 @@ export type MatrixAccountConfig = {
   username?: string;
   /** Matrix password (supports env: VAR resolution). */
   password?: string;
+  /**
+   * Auto-join room allowlist (room ids/aliases, or inviter user ids).
+   * Supports wildcards: "!*:server.tld", "#*:server.tld", "@*:server.tld".
+   * Bare "*:server.tld" is ignored.
+   */
+  autoJoinRooms?: string[];
   /** Direct message access policy (default: pairing). */
   dmPolicy?: DmPolicy;
   /** Optional allowlist for Matrix direct chats (MXIDs or "*"). */

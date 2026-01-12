@@ -24,15 +24,18 @@ lists and settings aligned with WhatsApp/Signal.
      - Username
      - Password (masked)
      - Enabled toggle
+     - Auto-join room allowlist (room ids/aliases, wildcard support)
    - Persist to `matrix.accounts.<id>` using the standard config API.
    - Add a Matrix form state in web UI (similar to `signalForm` in
      `ui/src/ui/controllers/connections.ts`).
    - Use the same form layout and validation patterns as WhatsApp/Signal.
+   - Keep advanced settings (auto-join list) grouped separately from core credentials.
 
 3) Status rendering
    - Surface configured/connected/error state for Matrix accounts.
    - Show last error reason if available (auth, sync, media).
    - Reuse provider status hooks from the gateway where possible.
+   - Note: auto-join only triggers for allowed rooms (no blind joins).
 
 4) UI copy + labels
    - Follow WhatsApp/Signal phrasing for consistency.

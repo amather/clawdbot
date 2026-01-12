@@ -22,6 +22,7 @@ import {
 } from "../pairing/pairing-store.js";
 import { resolveAgentRoute } from "../routing/resolve-route.js";
 import type { RuntimeEnv } from "../runtime.js";
+import type { MatrixEvent, RoomMember } from "matrix-js-sdk";
 import matrixSdk from "matrix-js-sdk/lib/matrix.js";
 
 import { resolveMatrixAccount } from "./accounts.js";
@@ -74,6 +75,71 @@ function resolveAllowFrom(entries: Array<string | number>): string[] {
     .filter(Boolean);
 }
 
+function normalizeAutoJoinEntry(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const normalized = trimmed.toLowerCase();
+  if (normalized.startsWith("*:")) return null;
+  if (
+    normalized.startsWith("!*:") ||
+    normalized.startsWith("#*:") ||
+    normalized.startsWith("@*:")
+  ) {
+    const domain = normalized.slice(3).trim();
+    return domain ? normalized : null;
+  }
+  if (
+    normalized.startsWith("!") ||
+    normalized.startsWith("#") ||
+    normalized.startsWith("@")
+  ) {
+    return normalized;
+  }
+  return null;
+}
+
+function normalizeAutoJoinAllowlist(entries: string[]): string[] {
+  return entries
+    .map((entry) => normalizeAutoJoinEntry(entry))
+    .filter((entry): entry is string => Boolean(entry));
+}
+
+function extractMatrixDomain(value: string): string {
+  const idx = value.indexOf(":");
+  if (idx < 0) return "";
+  return value.slice(idx + 1);
+}
+
+function matchesAutoJoinEntry(entry: string, candidate: string): boolean {
+  const normalized = candidate.trim().toLowerCase();
+  if (!normalized) return false;
+  if (
+    entry.startsWith("!*:") ||
+    entry.startsWith("#*:") ||
+    entry.startsWith("@*:")
+  ) {
+    const sigil = entry[0];
+    if (!normalized.startsWith(sigil)) return false;
+    const domain = extractMatrixDomain(normalized);
+    const entryDomain = entry.slice(3);
+    return Boolean(domain) && domain === entryDomain;
+  }
+  return normalized === entry;
+}
+
+function shouldAutoJoinInvite(
+  allowlist: string[],
+  candidates: string[],
+): boolean {
+  if (allowlist.length === 0) return false;
+  for (const candidate of candidates) {
+    for (const entry of allowlist) {
+      if (matchesAutoJoinEntry(entry, candidate)) return true;
+    }
+  }
+  return false;
+}
+
 async function resolveEffectiveAllowFrom(params: {
   cfg: ClawdbotConfig;
   accountId: string;
@@ -120,6 +186,9 @@ export async function monitorMatrixProvider(
   });
 
   const textChunkLimit = resolveTextChunkLimit(cfg, "matrix", account.accountId);
+  const autoJoinAllowlist = normalizeAutoJoinAllowlist(
+    account.config.autoJoinRooms ?? [],
+  );
 
   const deliverReplies = async (payloads: ReplyPayload[], roomId: string) => {
     for (const payload of payloads) {
@@ -158,6 +227,42 @@ export async function monitorMatrixProvider(
           direction: "outbound",
         });
       }
+    }
+  };
+
+  const handleAutoJoinInvite = async (
+    event: MatrixEvent,
+    member: RoomMember,
+  ) => {
+    if (autoJoinAllowlist.length === 0) return;
+    if (member.membership !== "invite") return;
+    if (member.userId !== selfId) return;
+    const roomId = member.roomId ?? event.getRoomId?.() ?? "";
+    if (!roomId) return;
+
+    const room = client.getRoom(roomId);
+    const aliases: string[] = [];
+    if (room?.getCanonicalAlias) {
+      const alias = room.getCanonicalAlias();
+      if (alias) aliases.push(alias);
+    }
+    if (room?.getAltAliases) {
+      const alt = room.getAltAliases();
+      if (Array.isArray(alt)) {
+        aliases.push(...alt.filter(Boolean));
+      }
+    }
+    const inviterId = event.getSender()?.trim() ?? "";
+    const candidates = [roomId, ...aliases, inviterId].filter(Boolean);
+    if (!shouldAutoJoinInvite(autoJoinAllowlist, candidates)) return;
+
+    try {
+      await client.joinRoom(roomId);
+      logVerbose(`matrix auto-joined room ${roomId}`);
+    } catch (err) {
+      runtime.error?.(
+        danger(`matrix auto-join failed (${roomId}): ${String(err)}`),
+      );
     }
   };
 
@@ -361,6 +466,13 @@ export async function monitorMatrixProvider(
       dispatcher,
     });
   };
+
+  const emitter = client as unknown as {
+    on: (event: string, cb: (...args: unknown[]) => void) => void;
+  };
+  emitter.on("RoomMember.membership", (event, member) => {
+    void handleAutoJoinInvite(event as MatrixEvent, member as RoomMember);
+  });
 
   await startMatrixSync(client, {
     accountId: account.accountId,

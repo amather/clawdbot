@@ -9,6 +9,7 @@ import {
   type DiscordGuildChannelForm,
   type DiscordGuildForm,
   type IMessageForm,
+  type MatrixForm,
   type SlackActionForm,
   type SlackForm,
   type SignalForm,
@@ -42,6 +43,9 @@ export type ConnectionsState = {
   signalForm: SignalForm;
   signalSaving: boolean;
   signalConfigStatus: string | null;
+  matrixForm: MatrixForm;
+  matrixSaving: boolean;
+  matrixConfigStatus: string | null;
   imessageForm: IMessageForm;
   imessageSaving: boolean;
   imessageConfigStatus: string | null;
@@ -179,6 +183,13 @@ export function updateIMessageForm(
   patch: Partial<IMessageForm>,
 ) {
   state.imessageForm = { ...state.imessageForm, ...patch };
+}
+
+export function updateMatrixForm(
+  state: ConnectionsState,
+  patch: Partial<MatrixForm>,
+) {
+  state.matrixForm = { ...state.matrixForm, ...patch };
 }
 
 export async function saveTelegramConfig(state: ConnectionsState) {
@@ -711,5 +722,81 @@ export async function saveIMessageConfig(state: ConnectionsState) {
     state.imessageConfigStatus = String(err);
   } finally {
     state.imessageSaving = false;
+  }
+}
+
+export async function saveMatrixConfig(state: ConnectionsState) {
+  if (!state.client || !state.connected) return;
+  if (state.matrixSaving) return;
+  state.matrixSaving = true;
+  state.matrixConfigStatus = null;
+  try {
+    const base = state.configSnapshot?.config ?? {};
+    const config = { ...base } as Record<string, unknown>;
+    const matrix = { ...(config.matrix ?? {}) } as Record<string, unknown>;
+    const accounts =
+      matrix.accounts && typeof matrix.accounts === "object"
+        ? ({ ...(matrix.accounts as Record<string, unknown>) } as Record<
+            string,
+            unknown
+          >)
+        : {};
+    const form = state.matrixForm;
+    const accountId = form.accountId.trim() || "default";
+    const account =
+      accounts[accountId] && typeof accounts[accountId] === "object"
+        ? ({ ...(accounts[accountId] as Record<string, unknown>) } as Record<
+            string,
+            unknown
+          >)
+        : {};
+
+    if (form.enabled) {
+      delete account.enabled;
+    } else {
+      account.enabled = false;
+    }
+
+    const serverUrl = form.serverUrl.trim();
+    if (serverUrl) account.serverUrl = serverUrl;
+    else delete account.serverUrl;
+
+    const username = form.username.trim();
+    if (username) account.username = username;
+    else delete account.username;
+
+    const password = form.password.trim();
+    if (password) account.password = password;
+    else delete account.password;
+
+    const autoJoinRooms = parseList(form.autoJoinRooms);
+    if (autoJoinRooms.length > 0) account.autoJoinRooms = autoJoinRooms;
+    else delete account.autoJoinRooms;
+
+    if (Object.keys(account).length > 0) {
+      accounts[accountId] = account;
+    } else {
+      delete accounts[accountId];
+    }
+
+    if (Object.keys(accounts).length > 0) {
+      matrix.accounts = accounts;
+    } else {
+      delete matrix.accounts;
+    }
+
+    if (Object.keys(matrix).length > 0) {
+      config.matrix = matrix;
+    } else {
+      delete config.matrix;
+    }
+
+    const raw = `${JSON.stringify(config, null, 2).trimEnd()}\n`;
+    await state.client.request("config.set", { raw });
+    state.matrixConfigStatus = "Saved. Restart gateway if needed.";
+  } catch (err) {
+    state.matrixConfigStatus = String(err);
+  } finally {
+    state.matrixSaving = false;
   }
 }

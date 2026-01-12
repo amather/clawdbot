@@ -866,6 +866,10 @@ export async function runTui(opts: TuiOptions) {
       onSubmit: (values) => {
         void (async () => {
           try {
+            const autoJoinRooms = (values.autoJoinRooms ?? "")
+              .split(/[,\n]/)
+              .map((entry) => entry.trim())
+              .filter(Boolean);
             const accountId =
               setup.resolveAccountId?.({
                 cfg,
@@ -879,6 +883,9 @@ export async function runTui(opts: TuiOptions) {
                 serverUrl: values.serverUrl,
                 username: values.username,
                 password: values.password,
+                ...(autoJoinRooms.length > 0
+                  ? { autoJoinRooms }
+                  : {}),
               },
             });
             await writeConfigFile(next);

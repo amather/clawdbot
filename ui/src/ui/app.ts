@@ -45,6 +45,7 @@ import {
   type CronFormState,
   type DiscordForm,
   type IMessageForm,
+  type MatrixForm,
   type SlackForm,
   type SignalForm,
   type TelegramForm,
@@ -67,6 +68,7 @@ import {
   logoutWhatsApp,
   saveDiscordConfig,
   saveIMessageConfig,
+  saveMatrixConfig,
   saveSlackConfig,
   saveSignalConfig,
   saveTelegramConfig,
@@ -328,6 +330,16 @@ export class ClawdbotApp extends LitElement {
   };
   @state() signalSaving = false;
   @state() signalConfigStatus: string | null = null;
+  @state() matrixForm: MatrixForm = {
+    accountId: "default",
+    enabled: true,
+    serverUrl: "",
+    username: "",
+    password: "",
+    autoJoinRooms: "",
+  };
+  @state() matrixSaving = false;
+  @state() matrixConfigStatus: string | null = null;
   @state() imessageForm: IMessageForm = {
     enabled: true,
     cliPath: "",
@@ -1188,6 +1200,12 @@ export class ClawdbotApp extends LitElement {
     await saveIMessageConfig(this);
     await loadConfig(this);
     await loadChannels(this, true);
+  }
+
+  async handleMatrixSave() {
+    await saveMatrixConfig(this);
+    await loadConfig(this);
+    await loadProviders(this, true);
   }
 
   // Sidebar handlers for tool output viewing

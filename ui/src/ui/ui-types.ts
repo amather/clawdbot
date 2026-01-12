@@ -143,6 +143,15 @@ export type SignalForm = {
   mediaMaxMb: string;
 };
 
+export type MatrixForm = {
+  accountId: string;
+  enabled: boolean;
+  serverUrl: string;
+  username: string;
+  password: string;
+  autoJoinRooms: string;
+};
+
 export type IMessageForm = {
   enabled: boolean;
   cliPath: string;
@@ -177,6 +186,7 @@ export type CronFormState = {
     | "discord"
     | "slack"
     | "signal"
+    | "matrix"
     | "imessage"
     | "msteams";
   to: string;

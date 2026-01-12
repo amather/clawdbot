@@ -18,6 +18,7 @@ type MatrixSetupValues = {
   serverUrl: string;
   username: string;
   password: string;
+  autoJoinRooms?: string;
 };
 
 type MatrixSetupParams = {
@@ -27,7 +28,13 @@ type MatrixSetupParams = {
 };
 
 type MatrixSetupField = {
-  id: "accountId" | "name" | "serverUrl" | "username" | "password";
+  id:
+    | "accountId"
+    | "name"
+    | "serverUrl"
+    | "username"
+    | "password"
+    | "autoJoinRooms";
   label: string;
   placeholder?: string;
   required?: boolean;
@@ -83,6 +90,12 @@ class MatrixSetupWizard implements Component {
         label: "Matrix password",
         placeholder: "env:MATRIX_PASSWORD",
         required: true,
+      },
+      {
+        id: "autoJoinRooms",
+        label: "Auto-join allowlist (optional)",
+        placeholder: "!*:matrix.org",
+        required: false,
       },
     ];
     this.input = new Input();
@@ -200,6 +213,7 @@ class MatrixSetupWizard implements Component {
     const username = valueMap.get("username")?.trim() || "";
     const password =
       valueMap.get("password")?.trim() || this.existingPassword;
+    const autoJoinRooms = valueMap.get("autoJoinRooms")?.trim() || "";
 
     if (!serverUrl || !username || !password) {
       this.error = "All required fields must be set.";
@@ -219,6 +233,7 @@ class MatrixSetupWizard implements Component {
       serverUrl,
       username,
       password,
+      autoJoinRooms: autoJoinRooms || undefined,
     });
   }
 }
