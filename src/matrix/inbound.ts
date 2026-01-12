@@ -6,6 +6,19 @@ export type MatrixInboundMedia = {
   size?: number;
   fileName?: string;
   msgType?: string;
+  encryptedFile?: {
+    url?: string;
+    key?: {
+      alg?: string;
+      kty?: string;
+      key_ops?: string[];
+      k?: string;
+      ext?: boolean;
+    };
+    iv?: string;
+    hashes?: { sha256?: string };
+    v?: string;
+  };
 };
 
 export type MatrixInboundMessage = {
@@ -24,7 +37,19 @@ type MatrixMessageContent = {
   body?: string;
   msgtype?: string;
   url?: string;
-  file?: { url?: string };
+  file?: {
+    url?: string;
+    key?: {
+      alg?: string;
+      kty?: string;
+      key_ops?: string[];
+      k?: string;
+      ext?: boolean;
+    };
+    iv?: string;
+    hashes?: { sha256?: string };
+    v?: string;
+  };
   info?: {
     mimetype?: string;
     size?: number;
@@ -34,7 +59,9 @@ type MatrixMessageContent = {
   };
 };
 
-function resolveMatrixMedia(content: MatrixMessageContent): MatrixInboundMedia | undefined {
+function resolveMatrixMedia(
+  content: MatrixMessageContent,
+): MatrixInboundMedia | undefined {
   const msgType = content.msgtype?.trim();
   const rawUrl = content.url?.trim() || content.file?.url?.trim();
   if (!rawUrl) return undefined;
@@ -48,6 +75,7 @@ function resolveMatrixMedia(content: MatrixMessageContent): MatrixInboundMedia |
     size,
     fileName,
     msgType,
+    encryptedFile: content.file ? { ...content.file } : undefined,
   };
 }
 

@@ -28,6 +28,7 @@ import matrixSdk from "matrix-js-sdk/lib/matrix.js";
 import { resolveMatrixAccount } from "./accounts.js";
 import { createMatrixClient, startMatrixSync, stopMatrixSync } from "./client.js";
 import { mapMatrixInboundEvent } from "./inbound.js";
+import { decryptMatrixAttachment } from "./media.js";
 import { sendMatrixMedia, sendMatrixText } from "./send.js";
 import { resolveProviderMediaMaxBytes } from "../providers/plugins/media-limits.js";
 
@@ -190,6 +191,28 @@ export async function monitorMatrixProvider(
   const autoJoinAllowlist = normalizeAutoJoinAllowlist(
     account.config.autoJoinRooms ?? [],
   );
+
+  const fetchMatrixMedia = async (mxcUrl: string, fileName?: string) => {
+    const trimmed = mxcUrl.trim();
+    if (!trimmed.startsWith("mxc://")) {
+      throw new Error("Matrix media URL missing");
+    }
+    const accessToken = client.getAccessToken?.();
+    if (!accessToken) {
+      throw new Error("Matrix access token missing for media download");
+    }
+    const mxcPath = trimmed.slice("mxc://".length);
+    const [serverName, mediaId] = mxcPath.split("/");
+    if (!serverName || !mediaId) {
+      throw new Error("Matrix media URL is invalid");
+    }
+    const url = `${account.serverUrl}/_matrix/client/v1/media/download/${serverName}/${mediaId}`;
+    return await fetchRemoteMedia({
+      url,
+      headers: { Authorization: `Bearer ${accessToken}` },
+      filePathHint: fileName,
+    });
+  };
 
   const deliverReplies = async (payloads: ReplyPayload[], roomId: string) => {
     for (const payload of payloads) {
@@ -372,17 +395,21 @@ export async function monitorMatrixProvider(
     let placeholder = "";
     if (inbound.media?.mxcUrl) {
       try {
-        const url = client.mxcUrlToHttp(inbound.media.mxcUrl);
-        if (!url) {
-          throw new Error("Matrix media URL missing");
+        const fetched = await fetchMatrixMedia(
+          inbound.media.mxcUrl,
+          inbound.media.fileName,
+        );
+        let mediaBuffer = fetched.buffer;
+        const encryptedFile = inbound.media.encryptedFile;
+        if (encryptedFile) {
+          mediaBuffer = decryptMatrixAttachment({
+            ciphertext: fetched.buffer,
+            encrypted: encryptedFile,
+          });
         }
-        const fetched = await fetchRemoteMedia({
-          url,
-          filePathHint: inbound.media.fileName,
-        });
         const saved = await saveMediaBuffer(
-          fetched.buffer,
-          fetched.contentType ?? inbound.media.contentType,
+          mediaBuffer,
+          inbound.media.contentType ?? fetched.contentType,
           "inbound",
           maxBytes,
         );

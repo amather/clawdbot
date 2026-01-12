@@ -16,6 +16,7 @@ export type FetchLike = (
 type FetchMediaOptions = {
   url: string;
   fetchImpl?: FetchLike;
+  headers?: Record<string, string>;
   filePathHint?: string;
 };
 
@@ -61,7 +62,7 @@ async function readErrorBodySnippet(
 export async function fetchRemoteMedia(
   options: FetchMediaOptions,
 ): Promise<FetchMediaResult> {
-  const { url, fetchImpl, filePathHint } = options;
+  const { url, fetchImpl, headers, filePathHint } = options;
   const fetcher: FetchLike | undefined = fetchImpl ?? globalThis.fetch;
   if (!fetcher) {
     throw new Error("fetch is not available");
@@ -69,7 +70,7 @@ export async function fetchRemoteMedia(
 
   let res: Response;
   try {
-    res = await fetcher(url);
+    res = await fetcher(url, headers ? { headers } : undefined);
   } catch (err) {
     throw new Error(`Failed to fetch media from ${url}: ${String(err)}`);
   }
