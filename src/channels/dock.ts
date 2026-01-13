@@ -1,6 +1,7 @@
 import type { ClawdbotConfig } from "../config/config.js";
 import { resolveDiscordAccount } from "../discord/accounts.js";
 import { resolveIMessageAccount } from "../imessage/accounts.js";
+import { resolveMatrixAccount } from "../matrix/accounts.js";
 import { resolveSignalAccount } from "../signal/accounts.js";
 import { resolveSlackAccount } from "../slack/accounts.js";
 import { resolveTelegramAccount } from "../telegram/accounts.js";
@@ -271,6 +272,25 @@ const DOCKS: Record<ChannelId, ChannelDock> = {
         currentThreadTs: context.ReplyToId,
         hasRepliedRef,
       }),
+    },
+  },
+  matrix: {
+    id: "matrix",
+    capabilities: {
+      chatTypes: ["direct", "group"],
+      media: true,
+    },
+    outbound: { textChunkLimit: 4000 },
+    config: {
+      resolveAllowFrom: ({ cfg, accountId }) =>
+        (resolveMatrixAccount({ cfg, accountId }).config.allowFrom ?? []).map(
+          (entry) => String(entry),
+        ),
+      formatAllowFrom: ({ allowFrom }) =>
+        allowFrom
+          .map((entry) => String(entry).trim())
+          .filter(Boolean)
+          .map((entry) => entry.replace(/^matrix:/i, "")),
     },
   },
   imessage: {

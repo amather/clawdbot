@@ -110,6 +110,25 @@ export function normalizeSignalMessagingTarget(
   return normalized.toLowerCase();
 }
 
+export function normalizeMatrixMessagingTarget(
+  raw: string,
+): string | undefined {
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  let normalized = trimmed;
+  if (normalized.toLowerCase().startsWith("matrix:")) {
+    normalized = normalized.slice("matrix:".length).trim();
+  }
+  if (!normalized) return undefined;
+  if (normalized.toLowerCase().startsWith("room:")) {
+    const id = normalized.slice("room:".length).trim();
+    return id ? `room:${id}` : undefined;
+  }
+  if (normalized.startsWith("!")) return normalized;
+  if (normalized.startsWith("@")) return `matrix:${normalized}`;
+  return `matrix:${normalized}`;
+}
+
 export function normalizeWhatsAppMessagingTarget(
   raw: string,
 ): string | undefined {

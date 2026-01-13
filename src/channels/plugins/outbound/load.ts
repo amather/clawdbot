@@ -13,6 +13,7 @@ const LOADERS: Record<ChannelId, OutboundLoader> = {
   discord: async () => (await import("./discord.js")).discordOutbound,
   slack: async () => (await import("./slack.js")).slackOutbound,
   signal: async () => (await import("./signal.js")).signalOutbound,
+  matrix: async () => (await import("./matrix.js")).matrixOutbound,
   imessage: async () => (await import("./imessage.js")).imessageOutbound,
   msteams: async () => (await import("./msteams.js")).msteamsOutbound,
 };
