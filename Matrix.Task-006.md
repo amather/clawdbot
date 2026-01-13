@@ -70,6 +70,7 @@ explicit approval from the owner.
 ## Checklist
 - [ ] End-to-end Matrix message flow validated (pre/post pairing)
 - [ ] Media send/receive validated
+- [ ] Reply formatting uses Matrix `formatted_body` for markdown (safe HTML)
 - [ ] Config schema tests updated
 - [ ] Provider registry tests updated
 - [ ] Status tests updated
