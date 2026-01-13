@@ -13,6 +13,8 @@ import {
   AgentWaitParamsSchema,
   type ChannelsLogoutParams,
   ChannelsLogoutParamsSchema,
+  type ChannelsResetDeviceParams,
+  ChannelsResetDeviceParamsSchema,
   type ChannelsStatusParams,
   ChannelsStatusParamsSchema,
   type ChannelsStatusResult,
@@ -254,6 +256,8 @@ export const validateChannelsStatusParams = ajv.compile<ChannelsStatusParams>(
 export const validateChannelsLogoutParams = ajv.compile<ChannelsLogoutParams>(
   ChannelsLogoutParamsSchema,
 );
+export const validateChannelsResetDeviceParams =
+  ajv.compile<ChannelsResetDeviceParams>(ChannelsResetDeviceParamsSchema);
 export const validateModelsListParams = ajv.compile<ModelsListParams>(
   ModelsListParamsSchema,
 );
@@ -353,6 +357,7 @@ export {
   ChannelsStatusParamsSchema,
   ChannelsStatusResultSchema,
   ChannelsLogoutParamsSchema,
+  ChannelsResetDeviceParamsSchema,
   WebLoginStartParamsSchema,
   WebLoginWaitParamsSchema,
   AgentSummarySchema,
@@ -420,6 +425,7 @@ export type {
   ChannelsStatusParams,
   ChannelsStatusResult,
   ChannelsLogoutParams,
+  ChannelsResetDeviceParams,
   WebLoginStartParams,
   WebLoginWaitParams,
   AgentSummary,

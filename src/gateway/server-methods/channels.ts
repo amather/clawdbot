@@ -13,6 +13,7 @@ import type {
 import type { ClawdbotConfig } from "../../config/config.js";
 import { loadConfig, readConfigFileSnapshot } from "../../config/config.js";
 import { getChannelActivity } from "../../infra/channel-activity.js";
+import { resetMatrixDeviceState } from "../../matrix/state.js";
 import { DEFAULT_ACCOUNT_ID } from "../../routing/session-key.js";
 import { defaultRuntime } from "../../runtime.js";
 import {
@@ -20,6 +21,7 @@ import {
   errorShape,
   formatValidationErrors,
   validateChannelsLogoutParams,
+  validateChannelsResetDeviceParams,
   validateChannelsStatusParams,
 } from "../protocol/index.js";
 import { formatForLog } from "../ws-log.js";
@@ -311,6 +313,83 @@ export const channelsHandlers: GatewayRequestHandlers = {
         plugin,
       });
       respond(true, payload, undefined);
+    } catch (err) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.UNAVAILABLE, formatForLog(err)),
+      );
+    }
+  },
+  "channels.resetDevice": async ({ params, respond, context }) => {
+    if (!validateChannelsResetDeviceParams(params)) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `invalid channels.resetDevice params: ${formatValidationErrors(validateChannelsResetDeviceParams.errors)}`,
+        ),
+      );
+      return;
+    }
+    const rawChannel = (params as { channel?: unknown }).channel;
+    const channelId =
+      typeof rawChannel === "string" ? normalizeChannelId(rawChannel) : null;
+    if (!channelId || channelId !== "matrix") {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          "channels.resetDevice only supports matrix",
+        ),
+      );
+      return;
+    }
+    const plugin = getChannelPlugin(channelId);
+    if (!plugin) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, `unknown channel: ${channelId}`),
+      );
+      return;
+    }
+    const snapshot = await readConfigFileSnapshot();
+    if (!snapshot.valid) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          "config invalid; fix it before resetting",
+        ),
+      );
+      return;
+    }
+    const cfg = snapshot.config ?? {};
+    const accountIdRaw = (params as { accountId?: unknown }).accountId;
+    const resolvedAccountId =
+      (typeof accountIdRaw === "string" ? accountIdRaw.trim() : "") ||
+      plugin.config.defaultAccountId?.(cfg) ||
+      plugin.config.listAccountIds(cfg)[0] ||
+      DEFAULT_ACCOUNT_ID;
+    try {
+      await context.stopChannel(channelId, resolvedAccountId);
+      const result = await resetMatrixDeviceState({
+        accountId: resolvedAccountId,
+      });
+      context.markChannelLoggedOut(channelId, true, resolvedAccountId);
+      respond(
+        true,
+        {
+          channel: channelId,
+          accountId: resolvedAccountId,
+          removed: result.removed,
+        },
+        undefined,
+      );
     } catch (err) {
       respond(
         false,
