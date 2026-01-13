@@ -548,6 +548,46 @@ const SignalConfigSchema = SignalAccountSchemaBase.extend({
   });
 });
 
+const MatrixAccountSchemaBase = z.object({
+  name: z.string().optional(),
+  capabilities: z.array(z.string()).optional(),
+  enabled: z.boolean().optional(),
+  serverUrl: z.string().optional(),
+  username: z.string().optional(),
+  password: z.string().optional(),
+  autoJoinRooms: z.array(z.string()).optional(),
+  dmPolicy: DmPolicySchema.optional().default("pairing"),
+  allowFrom: z.array(z.union([z.string(), z.number()])).optional(),
+  textChunkLimit: z.number().int().positive().optional(),
+  mediaMaxMb: z.number().int().positive().optional(),
+});
+
+const MatrixAccountSchema = MatrixAccountSchemaBase.superRefine(
+  (value, ctx) => {
+    requireOpenAllowFrom({
+      policy: value.dmPolicy,
+      allowFrom: value.allowFrom,
+      ctx,
+      path: ["allowFrom"],
+      message:
+        'channels.matrix.dmPolicy="open" requires channels.matrix.allowFrom to include "*"',
+    });
+  },
+);
+
+const MatrixConfigSchema = MatrixAccountSchemaBase.extend({
+  accounts: z.record(z.string(), MatrixAccountSchema.optional()).optional(),
+}).superRefine((value, ctx) => {
+  requireOpenAllowFrom({
+    policy: value.dmPolicy,
+    allowFrom: value.allowFrom,
+    ctx,
+    path: ["allowFrom"],
+    message:
+      'channels.matrix.dmPolicy="open" requires channels.matrix.allowFrom to include "*"',
+  });
+});
+
 const IMessageAccountSchemaBase = z.object({
   name: z.string().optional(),
   capabilities: z.array(z.string()).optional(),
@@ -778,6 +818,7 @@ const ChannelsSchema = z
     discord: DiscordConfigSchema.optional(),
     slack: SlackConfigSchema.optional(),
     signal: SignalConfigSchema.optional(),
+    matrix: MatrixConfigSchema.optional(),
     imessage: IMessageConfigSchema.optional(),
     msteams: MSTeamsConfigSchema.optional(),
   })
