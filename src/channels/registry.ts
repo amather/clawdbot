@@ -83,7 +83,7 @@ const CHAT_CHANNEL_META: Record<ChatChannelId, ChatChannelMeta> = {
     id: "matrix",
     label: "Matrix",
     selectionLabel: "Matrix",
-    docsPath: "/matrix",
+    docsPath: "/channels/matrix",
     docsLabel: "matrix",
     blurb: "Matrix user account login.",
   },
