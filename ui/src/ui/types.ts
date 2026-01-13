@@ -171,6 +171,17 @@ export type SignalStatus = {
   lastProbeAt?: number | null;
 };
 
+export type MatrixStatus = {
+  configured: boolean;
+  baseUrl?: string | null;
+  running: boolean;
+  connected: boolean;
+  lastStartAt?: number | null;
+  lastStopAt?: number | null;
+  lastError?: string | null;
+  lastEventAt?: number | null;
+};
+
 export type IMessageProbe = {
   ok: boolean;
   error?: string | null;
@@ -326,11 +337,12 @@ export type CronPayload =
         | "last"
         | "whatsapp"
         | "telegram"
-        | "discord"
-        | "slack"
-        | "signal"
-        | "imessage"
-        | "msteams";
+      | "discord"
+      | "slack"
+      | "signal"
+      | "matrix"
+      | "imessage"
+      | "msteams";
       to?: string;
       bestEffortDeliver?: boolean;
     };

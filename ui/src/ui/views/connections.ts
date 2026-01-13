@@ -6,6 +6,7 @@ import type {
   ChannelsStatusSnapshot,
   DiscordStatus,
   IMessageStatus,
+  MatrixStatus,
   SignalStatus,
   SlackStatus,
   TelegramStatus,
@@ -15,6 +16,7 @@ import type {
   DiscordActionForm,
   DiscordForm,
   IMessageForm,
+  MatrixForm,
   SlackActionForm,
   SlackForm,
   SignalForm,
@@ -73,6 +75,11 @@ export type ConnectionsProps = {
   signalForm: SignalForm;
   signalSaving: boolean;
   signalStatus: string | null;
+  matrixForm: MatrixForm;
+  matrixSaving: boolean;
+  matrixStatus: string | null;
+  matrixResetting: boolean;
+  matrixResetStatus: string | null;
   imessageForm: IMessageForm;
   imessageSaving: boolean;
   imessageStatus: string | null;
@@ -88,6 +95,9 @@ export type ConnectionsProps = {
   onSlackSave: () => void;
   onSignalChange: (patch: Partial<SignalForm>) => void;
   onSignalSave: () => void;
+  onMatrixChange: (patch: Partial<MatrixForm>) => void;
+  onMatrixSave: () => void;
+  onMatrixResetDevice: () => void;
   onIMessageChange: (patch: Partial<IMessageForm>) => void;
   onIMessageSave: () => void;
 };
@@ -103,6 +113,7 @@ export function renderConnections(props: ConnectionsProps) {
   const discord = (channels?.discord ?? null) as DiscordStatus | null;
   const slack = (channels?.slack ?? null) as SlackStatus | null;
   const signal = (channels?.signal ?? null) as SignalStatus | null;
+  const matrix = (channels?.matrix ?? null) as MatrixStatus | null;
   const imessage = (channels?.imessage ?? null) as IMessageStatus | null;
   const channelOrder: ChannelKey[] = [
     "whatsapp",
@@ -111,6 +122,7 @@ export function renderConnections(props: ConnectionsProps) {
     "slack",
     "signal",
     "imessage",
+    "matrix",
   ];
   const orderedChannels = channelOrder
     .map((key, index) => ({
@@ -132,6 +144,7 @@ export function renderConnections(props: ConnectionsProps) {
           discord,
           slack,
           signal,
+          matrix,
           imessage,
           channelAccounts: props.snapshot?.channelAccounts ?? null,
         }),
@@ -174,6 +187,7 @@ type ChannelKey =
   | "discord"
   | "slack"
   | "signal"
+  | "matrix"
   | "imessage";
 
 function channelEnabled(key: ChannelKey, props: ConnectionsProps) {
@@ -185,6 +199,7 @@ function channelEnabled(key: ChannelKey, props: ConnectionsProps) {
   const discord = (channels.discord ?? null) as DiscordStatus | null;
   const slack = (channels.slack ?? null) as SlackStatus | null;
   const signal = (channels.signal ?? null) as SignalStatus | null;
+  const matrix = (channels.matrix ?? null) as MatrixStatus | null;
   const imessage = (channels.imessage ?? null) as IMessageStatus | null;
   switch (key) {
     case "whatsapp":
@@ -201,6 +216,8 @@ function channelEnabled(key: ChannelKey, props: ConnectionsProps) {
       return Boolean(slack?.configured || slack?.running);
     case "signal":
       return Boolean(signal?.configured || signal?.running);
+    case "matrix":
+      return Boolean(matrix?.configured || matrix?.running || matrix?.connected);
     case "imessage":
       return Boolean(imessage?.configured || imessage?.running);
     default:
@@ -233,6 +250,7 @@ function renderChannel(
     discord?: DiscordStatus | null;
     slack?: SlackStatus | null;
     signal?: SignalStatus | null;
+    matrix?: MatrixStatus | null;
     imessage?: IMessageStatus | null;
     channelAccounts?: Record<string, ChannelAccountSnapshot[]> | null;
   },
@@ -1708,6 +1726,144 @@ function renderChannel(
               @click=${() => props.onSignalSave()}
             >
               ${props.signalSaving ? "Saving…" : "Save"}
+            </button>
+            <button class="btn" @click=${() => props.onRefresh(true)}>
+              Probe
+            </button>
+          </div>
+        </div>
+      `;
+    }
+    case "matrix": {
+      const matrix = data.matrix;
+      return html`
+        <div class="card">
+          <div class="card-title">Matrix</div>
+          <div class="card-sub">Homeserver credentials and sync status.</div>
+
+          <div class="status-list" style="margin-top: 16px;">
+            <div>
+              <span class="label">Configured</span>
+              <span>${matrix?.configured ? "Yes" : "No"}</span>
+            </div>
+            <div>
+              <span class="label">Running</span>
+              <span>${matrix?.running ? "Yes" : "No"}</span>
+            </div>
+            <div>
+              <span class="label">Connected</span>
+              <span>${matrix?.connected ? "Yes" : "No"}</span>
+            </div>
+            <div>
+              <span class="label">Base URL</span>
+              <span>${matrix?.baseUrl ?? "n/a"}</span>
+            </div>
+            <div>
+              <span class="label">Last start</span>
+              <span>${matrix?.lastStartAt ? formatAgo(matrix.lastStartAt) : "n/a"}</span>
+            </div>
+            <div>
+              <span class="label">Last event</span>
+              <span>${matrix?.lastEventAt ? formatAgo(matrix.lastEventAt) : "n/a"}</span>
+            </div>
+          </div>
+
+          ${matrix?.lastError
+            ? html`<div class="callout danger" style="margin-top: 12px;">
+                ${matrix.lastError}
+              </div>`
+            : nothing}
+
+          <div class="form-grid" style="margin-top: 16px;">
+            <label class="field">
+              <span>Enabled</span>
+              <select
+                .value=${props.matrixForm.enabled ? "yes" : "no"}
+                @change=${(e: Event) =>
+                  props.onMatrixChange({
+                    enabled: (e.target as HTMLSelectElement).value === "yes",
+                  })}
+              >
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Server URL</span>
+              <input
+                .value=${props.matrixForm.serverUrl}
+                @input=${(e: Event) =>
+                  props.onMatrixChange({
+                    serverUrl: (e.target as HTMLInputElement).value,
+                  })}
+                placeholder="https://matrix.example.com"
+              />
+            </label>
+            <label class="field">
+              <span>Username</span>
+              <input
+                .value=${props.matrixForm.username}
+                @input=${(e: Event) =>
+                  props.onMatrixChange({
+                    username: (e.target as HTMLInputElement).value,
+                  })}
+                placeholder="@clawd:matrix.org"
+              />
+            </label>
+            <label class="field">
+              <span>Password</span>
+              <input
+                type="password"
+                .value=${props.matrixForm.password}
+                @input=${(e: Event) =>
+                  props.onMatrixChange({
+                    password: (e.target as HTMLInputElement).value,
+                  })}
+              />
+            </label>
+          </div>
+
+          <div class="card-sub" style="margin-top: 14px;">Advanced</div>
+          <label class="field" style="margin-top: 8px;">
+            <span>Auto-join allowlist</span>
+            <input
+              .value=${props.matrixForm.autoJoinRooms}
+              @input=${(e: Event) =>
+                props.onMatrixChange({
+                  autoJoinRooms: (e.target as HTMLInputElement).value,
+                })}
+              placeholder="!roomid:server.tld, #alias:server.tld, @*:server.tld"
+            />
+            <div class="muted">
+              Supports !*:server, #*:server, @*:server. Bare *:server is ignored.
+            </div>
+          </label>
+
+          ${props.matrixStatus
+            ? html`<div class="callout" style="margin-top: 12px;">
+                ${props.matrixStatus}
+              </div>`
+            : nothing}
+          ${props.matrixResetStatus
+            ? html`<div class="callout" style="margin-top: 12px;">
+                ${props.matrixResetStatus}
+              </div>`
+            : nothing}
+
+          <div class="row" style="margin-top: 14px;">
+            <button
+              class="btn primary"
+              ?disabled=${props.matrixSaving}
+              @click=${() => props.onMatrixSave()}
+            >
+              ${props.matrixSaving ? "Saving…" : "Save"}
+            </button>
+            <button
+              class="btn danger"
+              ?disabled=${props.matrixResetting}
+              @click=${() => props.onMatrixResetDevice()}
+            >
+              ${props.matrixResetting ? "Resetting…" : "Reset device"}
             </button>
             <button class="btn" @click=${() => props.onRefresh(true)}>
               Probe
