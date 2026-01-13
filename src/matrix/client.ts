@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 
 import {
-  type CryptoCallbacks,
+  type ICryptoCallbacks,
   type MatrixClient,
   type MatrixEvent,
   type Room,
@@ -11,6 +11,9 @@ import {
 import matrixSdk from "matrix-js-sdk/lib/matrix.js";
 import localStorageCryptoStoreModule from "matrix-js-sdk/lib/crypto/store/localStorage-crypto-store.js";
 import memoryStoreModule from "matrix-js-sdk/lib/store/memory.js";
+import type { CryptoStore } from "matrix-js-sdk/lib/crypto/store/base.js";
+import type { LocalStorageCryptoStore as LocalStorageCryptoStoreType } from "matrix-js-sdk/lib/crypto/store/localStorage-crypto-store.js";
+import type { SecretStorageKeyDescription } from "matrix-js-sdk/lib/secret-storage.js";
 
 import { computeBackoff, sleepWithAbort } from "../infra/backoff.js";
 import {
@@ -40,9 +43,7 @@ const { MemoryStore } = memoryStoreModule as {
   MemoryStore: typeof import("matrix-js-sdk").MemoryStore;
 };
 const { LocalStorageCryptoStore } = localStorageCryptoStoreModule as {
-  LocalStorageCryptoStore: new (store: Storage) => {
-    startup: () => Promise<void>;
-  };
+  LocalStorageCryptoStore: typeof LocalStorageCryptoStoreType;
 };
 
 async function ensureOlmLoaded(): Promise<void> {
@@ -147,7 +148,7 @@ export async function createMatrixClient(params: {
     homedir: params.homedir,
   });
   const store = new MemoryStore({ localStorage: storage });
-  const cryptoStore = new LocalStorageCryptoStore(storage);
+  const cryptoStore: CryptoStore = new LocalStorageCryptoStore(storage);
   let cryptoState: MatrixCryptoState =
     (await readMatrixCryptoState({
       accountId: params.accountId,
@@ -184,13 +185,13 @@ export async function createMatrixClient(params: {
   };
 
   const cryptoCallbacks = {
-    getCrossSigningKey: async (type) => {
+    getCrossSigningKey: async (type: string, _pubKey: string) => {
       const stored = cryptoState.crossSigningKeys?.[
         type as "master" | "self_signing" | "user_signing"
       ];
       return decodeKey(stored);
     },
-    saveCrossSigningKeys: (keys) => {
+    saveCrossSigningKeys: (keys: Record<string, Uint8Array>) => {
       const next: MatrixCryptoState["crossSigningKeys"] = {};
       for (const [keyType, keyValue] of Object.entries(keys)) {
         next[keyType as "master" | "self_signing" | "user_signing"] =
@@ -198,7 +199,10 @@ export async function createMatrixClient(params: {
       }
       persistCryptoState({ crossSigningKeys: next });
     },
-    getSecretStorageKey: async ({ keys }) => {
+    getSecretStorageKey: async (
+      { keys }: { keys: Record<string, SecretStorageKeyDescription> },
+      _name: string,
+    ) => {
       const storedKey = decodeKey(cryptoState.secretStorageKey?.privateKey);
       if (!storedKey) return null;
       const storedKeyId = cryptoState.secretStorageKey?.keyId;
@@ -209,12 +213,16 @@ export async function createMatrixClient(params: {
       if (candidates.length !== 1) return null;
       return [candidates[0], storedKey] as const;
     },
-    cacheSecretStorageKey: (keyId, _keyInfo, key) => {
+    cacheSecretStorageKey: (
+      keyId: string,
+      _keyInfo: SecretStorageKeyDescription,
+      key: Uint8Array,
+    ) => {
       persistCryptoState({
         secretStorageKey: { keyId, privateKey: encodeKey(key) },
       });
     },
-  } satisfies CryptoCallbacks;
+  } satisfies ICryptoCallbacks;
 
   const cached = await readMatrixAuthState({
     accountId: params.accountId,

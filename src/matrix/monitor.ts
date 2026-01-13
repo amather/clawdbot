@@ -11,14 +11,14 @@ import type { ClawdbotConfig } from "../config/config.js";
 import { loadConfig } from "../config/config.js";
 import { resolveStorePath, updateLastRoute } from "../config/sessions.js";
 import { danger, logVerbose, shouldLogVerbose } from "../globals.js";
-import { recordProviderActivity } from "../infra/provider-activity.js";
+import { recordChannelActivity } from "../infra/channel-activity.js";
 import { mediaKindFromMime } from "../media/constants.js";
 import { fetchRemoteMedia } from "../media/fetch.js";
 import { saveMediaBuffer } from "../media/store.js";
 import { buildPairingReply } from "../pairing/pairing-messages.js";
 import {
-  readProviderAllowFromStore,
-  upsertProviderPairingRequest,
+  readChannelAllowFromStore,
+  upsertChannelPairingRequest,
 } from "../pairing/pairing-store.js";
 import { resolveAgentRoute } from "../routing/resolve-route.js";
 import type { RuntimeEnv } from "../runtime.js";
@@ -31,7 +31,7 @@ import { mapMatrixInboundEvent } from "./inbound.js";
 import { decryptMatrixAttachment } from "./media.js";
 import { sendMatrixMedia, sendMatrixText } from "./send.js";
 import { readMatrixSyncState, updateMatrixSyncState } from "./state.js";
-import { resolveProviderMediaMaxBytes } from "../providers/plugins/media-limits.js";
+import { resolveChannelMediaMaxBytes } from "../channels/plugins/media-limits.js";
 
 export type MonitorMatrixOpts = {
   accountId?: string;
@@ -151,7 +151,7 @@ async function resolveEffectiveAllowFrom(params: {
     accountId: params.accountId,
   });
   const baseAllow = resolveAllowFrom(configured.config.allowFrom ?? []);
-  const storeAllow = await readProviderAllowFromStore("matrix").catch(
+  const storeAllow = await readChannelAllowFromStore("matrix").catch(
     () => [],
   );
   return Array.from(new Set([...baseAllow, ...storeAllow]));
@@ -180,9 +180,9 @@ export async function monitorMatrixProvider(
     accountId: account.accountId,
   });
   const selfId = client.getUserId() ?? "";
-  const maxBytes = resolveProviderMediaMaxBytes({
+  const maxBytes = resolveChannelMediaMaxBytes({
     cfg,
-    resolveProviderLimitMb: ({ cfg, accountId }) =>
+    resolveChannelLimitMb: ({ cfg, accountId }: { cfg: ClawdbotConfig; accountId: string }) =>
       cfg.channels?.matrix?.accounts?.[accountId]?.mediaMaxMb ??
       cfg.channels?.matrix?.mediaMaxMb,
     accountId: account.accountId,
@@ -248,8 +248,8 @@ export async function monitorMatrixProvider(
             maxBytes,
             replyToId: payload.replyToId ?? undefined,
           });
-          recordProviderActivity({
-            provider: "matrix",
+          recordChannelActivity({
+            channel: "matrix",
             accountId: account.accountId,
             direction: "outbound",
           });
@@ -266,8 +266,8 @@ export async function monitorMatrixProvider(
           text: chunk,
           replyToId: payload.replyToId ?? undefined,
         });
-        recordProviderActivity({
-          provider: "matrix",
+        recordChannelActivity({
+          channel: "matrix",
           accountId: account.accountId,
           direction: "outbound",
         });
@@ -384,8 +384,8 @@ export async function monitorMatrixProvider(
       if (!allowed) {
         commandAuthorized = false;
         if (dmPolicy === "pairing") {
-          const { code, created } = await upsertProviderPairingRequest({
-            provider: "matrix",
+          const { code, created } = await upsertChannelPairingRequest({
+            channel: "matrix",
             id: inbound.senderId,
             meta: inbound.senderDisplayName
               ? { name: inbound.senderDisplayName }
@@ -397,7 +397,7 @@ export async function monitorMatrixProvider(
                 client,
                 roomId: inbound.roomId,
                 text: buildPairingReply({
-                  provider: "matrix",
+                  channel: "matrix",
                   idLine: `Your Matrix user id: ${inbound.senderId}`,
                   code,
                 }),
@@ -420,8 +420,8 @@ export async function monitorMatrixProvider(
       commandAuthorized = true;
     }
 
-    recordProviderActivity({
-      provider: "matrix",
+    recordChannelActivity({
+      channel: "matrix",
       accountId: account.accountId,
       direction: "inbound",
     });
@@ -474,7 +474,7 @@ export async function monitorMatrixProvider(
       ? `${inbound.senderDisplayName ?? inbound.senderId} id:${inbound.senderId}`
       : `${inbound.roomName ?? "Matrix Room"} id:${inbound.roomId}`;
     const body = formatAgentEnvelope({
-      provider: "Matrix",
+      channel: "Matrix",
       from: fromLabel,
       timestamp: inbound.timestamp ?? undefined,
       body: bodyText,
@@ -482,7 +482,7 @@ export async function monitorMatrixProvider(
 
     const route = resolveAgentRoute({
       cfg,
-      provider: "matrix",
+      channel: "matrix",
       accountId: account.accountId,
       peer: {
         kind: isDirect ? "dm" : "group",
@@ -522,7 +522,7 @@ export async function monitorMatrixProvider(
       await updateLastRoute({
         storePath,
         sessionKey: route.mainSessionKey,
-        provider: "matrix",
+        channel: "matrix",
         to: inbound.senderId,
         accountId: route.accountId,
       });
@@ -560,7 +560,7 @@ export async function monitorMatrixProvider(
         );
       },
       onIdle: () => {
-        void client.sendTyping(inbound.roomId, false).catch((err) => {
+        void client.sendTyping(inbound.roomId, false, 0).catch((err) => {
           if (shouldLogVerbose()) {
             runtime.error?.(
               danger(`matrix typing stop failed: ${String(err)}`),
@@ -568,7 +568,7 @@ export async function monitorMatrixProvider(
           }
         });
       },
-      });
+    });
 
     await dispatchReplyFromConfig({
       ctx: ctxPayload,

@@ -858,6 +858,7 @@ export async function runTui(opts: TuiOptions) {
       tui.requestRender();
       return;
     }
+    const setup = plugin.setup;
     const wizard = createMatrixSetupWizard({
       cfg,
       onCancel: () => {
