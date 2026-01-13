@@ -3,6 +3,7 @@ import matrixSdk from "matrix-js-sdk/lib/matrix.js";
 
 import { mediaKindFromMime } from "../media/constants.js";
 import { loadWebMedia } from "../web/media.js";
+import { formatMatrixMessage } from "./format.js";
 
 type MatrixSendResult = {
   eventId: string;
@@ -11,6 +12,8 @@ type MatrixSendResult = {
 type MatrixRoomMessageContent = {
   msgtype: string;
   body: string;
+  formatted_body?: string;
+  format?: "org.matrix.custom.html";
   [key: string]: unknown;
 };
 
@@ -82,7 +85,7 @@ export async function sendMatrixText(params: {
   text: string;
   replyToId?: string;
 }): Promise<MatrixSendResult> {
-  const body = params.text ?? "";
+  const { body, formattedBody, format } = formatMatrixMessage(params.text ?? "");
   if (!body.trim()) {
     throw new Error("Matrix send requires non-empty text");
   }
@@ -90,6 +93,8 @@ export async function sendMatrixText(params: {
   const content = {
     msgtype: "m.text",
     body,
+    format,
+    formatted_body: formattedBody,
     ...buildReplyRelation(params.replyToId),
   } as MatrixRoomMessageContent;
   const sendEvent = params.client.sendEvent.bind(params.client) as (
@@ -178,9 +183,12 @@ export async function sendMatrixMedia(params: {
     const derivedKind = mediaKindFromMime(media.contentType ?? undefined);
     return derivedKind ? `<media:${derivedKind}>` : "<media:file>";
   })();
+  const formatted = formatMatrixMessage(placeholder);
   const content = {
     msgtype,
-    body: placeholder,
+    body: formatted.body,
+    format: formatted.format,
+    formatted_body: formatted.formattedBody,
     url: mxcUrl,
     info: {
       mimetype: media.contentType ?? undefined,
