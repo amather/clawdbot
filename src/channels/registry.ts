@@ -6,6 +6,7 @@ export const CHAT_CHANNEL_ORDER = [
   "discord",
   "slack",
   "signal",
+  "matrix",
   "imessage",
   "msteams",
 ] as const;
@@ -77,6 +78,14 @@ const CHAT_CHANNEL_META: Record<ChatChannelId, ChatChannelMeta> = {
     docsLabel: "signal",
     blurb:
       'signal-cli linked device; more setup (David Reagans: "Hop on Discord.").',
+  },
+  matrix: {
+    id: "matrix",
+    label: "Matrix",
+    selectionLabel: "Matrix",
+    docsPath: "/channels/matrix",
+    docsLabel: "matrix",
+    blurb: "Matrix user account login.",
   },
   imessage: {
     id: "imessage",

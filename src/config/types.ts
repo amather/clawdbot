@@ -726,6 +726,40 @@ export type SignalConfig = {
   accounts?: Record<string, SignalAccountConfig>;
 } & SignalAccountConfig;
 
+export type MatrixAccountConfig = {
+  /** Optional display name for this account (used in CLI/UI lists). */
+  name?: string;
+  /** Optional provider capability tags used for agent/runtime guidance. */
+  capabilities?: string[];
+  /** If false, do not start this Matrix account. Default: true. */
+  enabled?: boolean;
+  /** Matrix homeserver base URL. */
+  serverUrl?: string;
+  /** Matrix username (full MXID or localpart). */
+  username?: string;
+  /** Matrix password (supports env: VAR resolution). */
+  password?: string;
+  /**
+   * Auto-join room allowlist (room ids/aliases, or inviter user ids).
+   * Supports wildcards: "!*:server.tld", "#*:server.tld", "@*:server.tld".
+   * Bare "*:server.tld" is ignored.
+   */
+  autoJoinRooms?: string[];
+  /** Direct message access policy (default: pairing). */
+  dmPolicy?: DmPolicy;
+  /** Optional allowlist for Matrix direct chats (MXIDs or "*"). */
+  allowFrom?: Array<string | number>;
+  /** Outbound text chunk size (chars). Default: 4000. */
+  textChunkLimit?: number;
+  /** Maximum media file size in MB. */
+  mediaMaxMb?: number;
+};
+
+export type MatrixConfig = {
+  /** Optional per-account Matrix configuration (multi-account). */
+  accounts?: Record<string, MatrixAccountConfig>;
+} & MatrixAccountConfig;
+
 export type MSTeamsWebhookConfig = {
   /** Port for the webhook server. Default: 3978. */
   port?: number;
@@ -809,6 +843,7 @@ export type ChannelsConfig = {
   discord?: DiscordConfig;
   slack?: SlackConfig;
   signal?: SignalConfig;
+  matrix?: MatrixConfig;
   imessage?: IMessageConfig;
   msteams?: MSTeamsConfig;
 };

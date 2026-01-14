@@ -354,6 +354,7 @@ const LEGACY_CONFIG_MIGRATIONS: LegacyConfigMigration[] = [
         "discord",
         "slack",
         "signal",
+        "matrix",
         "imessage",
         "msteams",
       ];

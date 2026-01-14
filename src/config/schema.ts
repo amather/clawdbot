@@ -162,6 +162,7 @@ const FIELD_LABELS: Record<string, string> = {
   "channels.discord": "Discord",
   "channels.slack": "Slack",
   "channels.signal": "Signal",
+  "channels.matrix": "Matrix",
   "channels.imessage": "iMessage",
   "channels.msteams": "MS Teams",
   "channels.telegram.botToken": "Telegram Bot Token",
@@ -178,6 +179,11 @@ const FIELD_LABELS: Record<string, string> = {
   "channels.whatsapp.dmPolicy": "WhatsApp DM Policy",
   "channels.whatsapp.selfChatMode": "WhatsApp Self-Phone Mode",
   "channels.signal.dmPolicy": "Signal DM Policy",
+  "channels.matrix.serverUrl": "Matrix Server URL",
+  "channels.matrix.username": "Matrix Username",
+  "channels.matrix.password": "Matrix Password",
+  "channels.matrix.autoJoinRooms": "Matrix Auto-Join Rooms",
+  "channels.matrix.dmPolicy": "Matrix DM Policy",
   "channels.imessage.dmPolicy": "iMessage DM Policy",
   "channels.discord.dm.policy": "Discord DM Policy",
   "channels.discord.retry.attempts": "Discord Retry Attempts",
@@ -224,6 +230,8 @@ const FIELD_HELP: Record<string, string> = {
     'Optional allowlist of model ids (e.g. "gpt-5.2" or "openai/gpt-5.2").',
   "channels.slack.allowBots":
     "Allow bot-authored messages to trigger Slack replies (default: false).",
+  "channels.matrix.autoJoinRooms":
+    'Auto-join invite allowlist (room ids/aliases, or inviter ids). Supports "!*:server", "#*:server", "@*:server".',
   "auth.profiles": "Named auth profiles (provider + mode + optional email).",
   "auth.order":
     "Ordered auth profile IDs per provider (used for automatic failover).",
@@ -336,6 +344,8 @@ const FIELD_HELP: Record<string, string> = {
     "Same-phone setup (bot uses your personal WhatsApp number).",
   "channels.signal.dmPolicy":
     'Direct message access control ("pairing" recommended). "open" requires channels.signal.allowFrom=["*"].',
+  "channels.matrix.dmPolicy":
+    'Direct message access control ("pairing" recommended). "open" requires channels.matrix.allowFrom=["*"].',
   "channels.imessage.dmPolicy":
     'Direct message access control ("pairing" recommended). "open" requires channels.imessage.allowFrom=["*"].',
   "channels.discord.dm.policy":
@@ -358,6 +368,8 @@ const FIELD_PLACEHOLDERS: Record<string, string> = {
   "gateway.remote.url": "ws://host:18789",
   "gateway.remote.sshTarget": "user@host",
   "gateway.controlUi.basePath": "/clawdbot",
+  "channels.matrix.autoJoinRooms":
+    "!*:matrix.org, #*:matrix.org, @*:matrix.org",
 };
 
 const SENSITIVE_PATTERNS = [/token/i, /password/i, /secret/i, /api.?key/i];

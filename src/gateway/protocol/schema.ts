@@ -658,6 +658,14 @@ export const ChannelsLogoutParamsSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const ChannelsResetDeviceParamsSchema = Type.Object(
+  {
+    channel: NonEmptyString,
+    accountId: Type.Optional(Type.String()),
+  },
+  { additionalProperties: false },
+);
+
 export const WebLoginStartParamsSchema = Type.Object(
   {
     force: Type.Optional(Type.Boolean()),
@@ -1081,6 +1089,7 @@ export const ProtocolSchemas: Record<string, TSchema> = {
   ChannelsStatusParams: ChannelsStatusParamsSchema,
   ChannelsStatusResult: ChannelsStatusResultSchema,
   ChannelsLogoutParams: ChannelsLogoutParamsSchema,
+  ChannelsResetDeviceParams: ChannelsResetDeviceParamsSchema,
   WebLoginStartParams: WebLoginStartParamsSchema,
   WebLoginWaitParams: WebLoginWaitParamsSchema,
   AgentSummary: AgentSummarySchema,
@@ -1160,6 +1169,9 @@ export type TalkModeParams = Static<typeof TalkModeParamsSchema>;
 export type ChannelsStatusParams = Static<typeof ChannelsStatusParamsSchema>;
 export type ChannelsStatusResult = Static<typeof ChannelsStatusResultSchema>;
 export type ChannelsLogoutParams = Static<typeof ChannelsLogoutParamsSchema>;
+export type ChannelsResetDeviceParams = Static<
+  typeof ChannelsResetDeviceParamsSchema
+>;
 export type WebLoginStartParams = Static<typeof WebLoginStartParamsSchema>;
 export type WebLoginWaitParams = Static<typeof WebLoginWaitParamsSchema>;
 export type AgentSummary = Static<typeof AgentSummarySchema>;
